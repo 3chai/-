@@ -3,7 +3,7 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import math, re, io, os, unicodedata, zipfile
 
-# 画像サイズとレイアウト定数
+# 定数たち
 true_width, true_height = 3508, 4961
 frames_per_page = 144
 frame_height_true = 49.5
@@ -16,7 +16,7 @@ circle_offset_x_true = -5
 circle_offset_y_true = -2
 alphabet_offset_x_true = -13
 
-# フォント
+# フォント読み込み
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
 font_size_true = int(12 / (1086 / 3508))
 font_large = ImageFont.truetype(font_path, size=font_size_true)
@@ -96,7 +96,7 @@ def generate_timesheet(file_bytes):
     return result_images
 
 # Streamlit UI
-st.title("ちゃむタイムシートくん Web版 v1.0 🎉")
+st.title("ちゃむタイムシートくん Web版 v1.1 🎉")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:
@@ -110,11 +110,20 @@ if uploaded_file is not None:
                 for idx, page_img in enumerate(pages):
                     st.write(f"ページ {idx+1}")
                     st.image(page_img, caption=f"Page {idx+1}", use_container_width=True)
+
                     img_bytes = io.BytesIO()
                     page_img.save(img_bytes, format='PNG')
                     img_bytes.seek(0)
+
                     filename = f"timesheet_page_{idx+1}.png"
-                    zip_file.writestr(filename, img_bytes.read())
+                    zip_file.writestr(filename, img_bytes.getvalue())
+
+                    st.download_button(
+                        label=f"⬇️ ダウンロード Page {idx+1}",
+                        data=img_bytes,
+                        file_name=filename,
+                        mime="image/png"
+                    )
 
             zip_buffer.seek(0)
             st.download_button(

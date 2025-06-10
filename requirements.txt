@@ -1,0 +1,6 @@
+
+streamlit
+pandas
+cairocffi
+pangocffi==0.10.0
+pangocairocffi

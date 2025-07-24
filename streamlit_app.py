@@ -39,12 +39,8 @@ def read_csv_flexibly(file_bytes):
 
 def generate_timesheet(file_bytes):
     df_raw = read_csv_flexibly(file_bytes)
-    if df_raw.empty:
-        return []
-
-    if 'Frame' not in df_raw.columns:
-        st.warning("Frame列が見つかりません。列名の行がズレてるかも？")
-        return []
+    if df_raw.empty or 'Frame' not in df_raw.columns:
+        return [], 0
 
     all_columns = ['Frame', 'A', 'B', '_book', 'C', 'D', 'E', 'H']
     for col in all_columns:
@@ -57,7 +53,7 @@ def generate_timesheet(file_bytes):
     df_raw = df_raw[df_raw['Frame'] > 0]
 
     if df_raw.empty:
-        return []
+        return [], 0
 
     valid_cells = [cell for cell in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] if cell in df_raw.columns]
 
@@ -65,12 +61,18 @@ def generate_timesheet(file_bytes):
     total_pages = math.ceil(max_frame_num / frames_per_page)
 
     result_images = []
+
     for page in range(total_pages):
         img = Image.new("RGBA", (true_width, true_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         start_frame = page * frames_per_page + 1
         end_frame = (page + 1) * frames_per_page
         df_page = df_raw[(df_raw['Frame'] >= start_frame) & (df_raw['Frame'] <= end_frame)]
+
+        if not df_page.empty:
+            last_frame_in_page = df_page['Frame'].max()
+        else:
+            last_frame_in_page = None
 
         for cell in valid_cells:
             x_base_true = cell_x_positions_true[cell]
@@ -87,26 +89,40 @@ def generate_timesheet(file_bytes):
                 if timing == '●' or timing == '○':
                     x_true += circle_offset_x_true
                     y_draw_true += circle_offset_y_true
-                elif re.match(r"^\d+[a-zA-Z]$", timing):
+                elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
-                elif re.fullmatch(r"\d{2,}", timing):  # ← 2桁以上の数字に変更！
-                    x_true -= 13
 
                 draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 
+        # 黒バーの描画（ラストフレームの次行）
+        if last_frame_in_page:
+            frame_in_column_total = (last_frame_in_page - 1) % frames_per_page
+            column = frame_in_column_total // 72
+            frame_in_column = frame_in_column_total % 72
+            bar_y = first_frame_top_y_true + (frame_in_column + 1) * frame_height_true
+            bar_x = 0 if column == 0 else column_offset_x
+            draw.rectangle([(bar_x, bar_y), (bar_x + 1700, bar_y + frame_height_true)], fill=(0, 0, 0, 255))
+
         result_images.append(img)
-    return result_images
+
+    return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.2 🎉")
+st.title("ちゃいむしーと Web版 v1.2 🖤")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:
     if st.button("タイムシート生成！"):
-        pages = generate_timesheet(uploaded_file.read())
+        pages, total_frames = generate_timesheet(uploaded_file.read())
+
         if not pages:
             st.warning("有効なFrameデータが見つかりませんでした。")
         else:
+            seconds = total_frames // 24
+            remainder = total_frames % 24
+            time_str = f"{seconds} + {remainder}"
+            st.text_input("TIME", value=time_str)
+
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                 for idx, page_img in enumerate(pages):

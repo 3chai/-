@@ -84,13 +84,13 @@ def generate_timesheet(file_bytes):
                 x_true = x_base_true if column == 0 else x_base_true + column_offset_x
                 y_draw_true = y_true + text_offset_y
 
-           if timing == '●' or timing == '○':
-                x_true += circle_offset_x_true
-                y_draw_true += circle_offset_y_true
-            elif re.match(r"^\d+[a-zA-Z]$", timing):
-                x_true += alphabet_offset_x_true
-            elif re.fullmatch(r"\d{10,}", timing):  # ← これを追加！
-                x_true -= 5
+     　　　      if timing == '●' or timing == '○':
+      　　　          x_true += circle_offset_x_true
+      　　　          y_draw_true += circle_offset_y_true
+      　　　      elif re.match(r"^\d+[a-zA-Z]$", timing):
+       　　　         x_true += alphabet_offset_x_true
+        　　　    elif re.fullmatch(r"\d{10,}", timing):  # ← これを追加！
+         　　　       x_true -= 5
 
                 draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 

@@ -72,30 +72,25 @@ def generate_timesheet(file_bytes):
         end_frame = (page + 1) * frames_per_page
         df_page = df_raw[(df_raw['Frame'] >= start_frame) & (df_raw['Frame'] <= end_frame)]
 
-    for cell in valid_cells:
-        x_base_true = cell_x_positions_true[cell]
-        for _, row in df_page.iterrows():
-            frame_num = int(row['Frame'])
-            timing = str(row[cell]) if not pd.isna(row[cell]) else ""
-            frame_in_column_total = (frame_num - 1) % frames_per_page
-            column = frame_in_column_total // 72
-            frame_in_column = frame_in_column_total % 72
-            y_true = first_frame_top_y_true + frame_in_column * frame_height_true
-            x_true = x_base_true if column == 0 else x_base_true + column_offset_x
-            y_draw_true = y_true + text_offset_y
+        for cell in valid_cells:
+            x_base_true = cell_x_positions_true[cell]
+            for _, row in df_page.iterrows():
+                frame_num = int(row['Frame'])
+                timing = str(row[cell]) if not pd.isna(row[cell]) else ""
+                frame_in_column_total = (frame_num - 1) % frames_per_page
+                column = frame_in_column_total // 72
+                frame_in_column = frame_in_column_total % 72
+                y_true = first_frame_top_y_true + frame_in_column * frame_height_true
+                x_true = x_base_true if column == 0 else x_base_true + column_offset_x
+                y_draw_true = y_true + text_offset_y
 
-            # ●や○なら中心に合わせて調整
-            if timing == '●' or timing == '○':
-                x_true += circle_offset_x_true
-                y_draw_true += circle_offset_y_true
-            # 数字＋アルファベット（例：3A）の場合ずらす
-            elif re.match(r"^\d+[a-zA-Z]$", timing):
-                x_true += alphabet_offset_x_true
-            # 10桁以上の数字なら左に5pxずらす
-            elif re.fullmatch(r"\d{10,}", timing):
-                x_true -= 5
+                if timing == '●' or timing == '○':
+                    x_true += circle_offset_x_true
+                    y_draw_true += circle_offset_y_true
+                elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{10,}", timing):
+                    x_true += alphabet_offset_x_true
 
-            draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
+                draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 
         result_images.append(img)
     return result_images

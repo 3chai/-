@@ -102,9 +102,14 @@ def generate_timesheet(file_bytes):
             bar_y = first_frame_top_y_true + (frame_in_column + 1) * frame_height_true
             bar_x = 0 if column == 0 else column_offset_x
             # バー太さ倍（frame_height_true * 2）、左端5px内側に寄せる
-            bar_width = 1700 - 20  # ← 少し削る
-            bar_height = frame_height_true * 2  # ← 倍にする
-            draw.rectangle([(bar_x + 5, bar_y), (bar_x + 5 + bar_width, bar_y + bar_height)], fill=(0, 0, 0, 255))
+            bar_width = 1700 - 5  # ← はみ出し防止
+            bar_height = frame_height_true * 2
+            bar_shift_x = 110  # ← 2マス分右にシフト（55 * 2）
+
+draw.rectangle(
+    [(bar_x + 5 + bar_shift_x, bar_y), (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
+    fill=(0, 0, 0, 255)
+)
 
         result_images.append(img)
 

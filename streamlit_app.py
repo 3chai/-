@@ -106,10 +106,10 @@ def generate_timesheet(file_bytes):
             bar_height = frame_height_true * 2
             bar_shift_x = 110  # ← 2マス分右にシフト（55 * 2）
 
-draw.rectangle(
-    [(bar_x + 5 + bar_shift_x, bar_y), (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
-    fill=(0, 0, 0, 255)
-)
+            draw.rectangle(
+                [(bar_x + 5 + bar_shift_x, bar_y), (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
+                fill=(0, 0, 0, 255)
+            )
 
         result_images.append(img)
 

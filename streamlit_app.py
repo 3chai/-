@@ -104,7 +104,7 @@ def generate_timesheet(file_bytes):
             # バー太さ倍（frame_height_true * 2）、左端5px内側に寄せる
             bar_width = 1700  # ← はみ出し防止
             bar_height = frame_height_true * 2
-            bar_shift_x = 110  # ← 2マス分右にシフト（55 * 2）
+            bar_shift_x = 100  # ← 2マス分右にシフト（55 * 2）
 
             draw.rectangle(
                 [(bar_x + 5 + bar_shift_x, bar_y), (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],

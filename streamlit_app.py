@@ -96,7 +96,7 @@ def generate_timesheet(file_bytes):
     return result_images
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.1 🎉")
+st.title("ちゃいむしーと Web版 v1.2 🎉")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:

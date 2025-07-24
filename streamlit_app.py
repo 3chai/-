@@ -101,7 +101,10 @@ def generate_timesheet(file_bytes):
             frame_in_column = frame_in_column_total % 72
             bar_y = first_frame_top_y_true + (frame_in_column + 1) * frame_height_true
             bar_x = 0 if column == 0 else column_offset_x
-            draw.rectangle([(bar_x, bar_y), (bar_x + 1700, bar_y + frame_height_true)], fill=(0, 0, 0, 255))
+            # バー太さ倍（frame_height_true * 2）、左端5px内側に寄せる
+            bar_width = 1700 - 20  # ← 少し削る
+            bar_height = frame_height_true * 2  # ← 倍にする
+            draw.rectangle([(bar_x + 5, bar_y), (bar_x + 5 + bar_width, bar_y + bar_height)], fill=(0, 0, 0, 255))
 
         result_images.append(img)
 

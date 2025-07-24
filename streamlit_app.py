@@ -87,8 +87,10 @@ def generate_timesheet(file_bytes):
                 if timing == '●' or timing == '○':
                     x_true += circle_offset_x_true
                     y_draw_true += circle_offset_y_true
-                elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{10,}", timing):
+                elif re.match(r"^\d+[a-zA-Z]$", timing):
                     x_true += alphabet_offset_x_true
+                elif re.fullmatch(r"\d{2,}", timing):  # ← 2桁以上の数字に変更！
+                    x_true -= 13
 
                 draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 

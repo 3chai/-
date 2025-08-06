@@ -19,7 +19,7 @@ presets = {
     "推しの子": {
         "first_frame_top_y_true": 468,
         "frame_height_true": 30,
-        "cell_x_positions_true": {cell: 57 + 29 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 50 + 29 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 870,
         "true_width": 1754,
         "true_height": 2480

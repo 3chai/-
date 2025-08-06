@@ -8,7 +8,7 @@ cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
 
 # プリセット辞書（true_heightも追加）
 presets = {
-    "標準": {
+    "Andraft": {
         "first_frame_top_y_true": 1278.67,
         "frame_height_true": 49.5,
         "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
@@ -16,7 +16,7 @@ presets = {
         "true_width": 3508,
         "true_height": 4961
     },
-    "B社": {
+    "動画工房": {
         "first_frame_top_y_true": 468,
         "frame_height_true": 27.25,
         "cell_x_positions_true": {cell: 51.7 + 29 * offset for cell, offset in cell_offsets.items()},

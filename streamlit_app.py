@@ -208,7 +208,9 @@ if uploaded_file is not None:
                 data=zip_buffer,
                 file_name="timesheets_all.zip",
                 mime="application/zip"
-            )            draw.rectangle(
+            )            
+            
+            draw.rectangle(
                 [(bar_x + 5 + bar_shift_x, bar_y),
                  (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
                 fill=(0, 0, 0, 128)

@@ -3,7 +3,7 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import math, re, io, os, unicodedata, zipfile
 
-# 定数たち
+# 定数
 true_width, true_height = 3508, 4961
 frames_per_page = 144
 frame_height_true = 49.5
@@ -16,7 +16,7 @@ circle_offset_x_true = -5
 circle_offset_y_true = -2
 alphabet_offset_x_true = -13
 
-# フォント読み込み
+# フォント
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
 font_size_true = int(12 / (1086 / 3508))
 font_large = ImageFont.truetype(font_path, size=font_size_true)
@@ -36,6 +36,43 @@ def read_csv_flexibly(file_bytes):
     except Exception as e:
         st.error(f"CSVの読み込みに失敗しました: {e}")
         return pd.DataFrame()
+
+def preprocess_cells(df_raw, valid_cells):
+    """冒頭×、5コマ以上空白で縦書き〜 or ーを入れる"""
+    for cell in valid_cells:
+        seen_content = False
+        empty_count = 0
+        last_type = None  # "cross", "number", "other"
+
+        for idx, row in df_raw.iterrows():
+            val = str(row[cell]).strip()
+
+            # 空欄
+            if val == "" or pd.isna(row[cell]):
+                if not seen_content:
+                    # 冒頭は×
+                    df_raw.at[idx, cell] = "×"
+                    last_type = "cross"
+                else:
+                    empty_count += 1
+                    # 5コマ目で縦書き記号
+                    if empty_count == 5:
+                        if last_type == "cross":
+                            df_raw.at[idx, cell] = "〜"
+                        elif last_type == "number":
+                            df_raw.at[idx, cell] = "ー"
+            else:
+                # 中身あり
+                seen_content = True
+                empty_count = 0
+
+                if val == "×":
+                    last_type = "cross"
+                elif val.isdigit():
+                    last_type = "number"
+                else:
+                    last_type = "other"
+    return df_raw
 
 def generate_timesheet(file_bytes):
     df_raw = read_csv_flexibly(file_bytes)
@@ -57,9 +94,11 @@ def generate_timesheet(file_bytes):
 
     valid_cells = [cell for cell in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] if cell in df_raw.columns]
 
+    # 冒頭× & 空白5コマ縦記号処理
+    df_raw = preprocess_cells(df_raw, valid_cells)
+
     max_frame_num = df_raw['Frame'].max()
     total_pages = math.ceil(max_frame_num / frames_per_page)
-
     result_images = []
 
     for page in range(total_pages):
@@ -86,29 +125,33 @@ def generate_timesheet(file_bytes):
                 x_true = x_base_true if column == 0 else x_base_true + column_offset_x
                 y_draw_true = y_true + text_offset_y
 
+                # 調整
                 if timing == '●' or timing == '○':
                     x_true += circle_offset_x_true
                     y_draw_true += circle_offset_y_true
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
-                draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
+                # 縦書き記号の処理
+                if timing in ["〜", "ー"]:
+                    draw.text((x_true, y_draw_true), "\n".join(list(timing)), fill=(0, 0, 0, 255), font=font_large)
+                else:
+                    draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 
-        # 黒バーの描画（ラストフレームの次行）
+        # 黒バー（太さ倍・右に2マス）
         if last_frame_in_page:
             frame_in_column_total = (last_frame_in_page - 1) % frames_per_page
             column = frame_in_column_total // 72
             frame_in_column = frame_in_column_total % 72
             bar_y = first_frame_top_y_true + (frame_in_column + 1) * frame_height_true
             bar_x = 0 if column == 0 else column_offset_x
-            # バー太さ倍（frame_height_true * 2）、左端5px内側に寄せる
-            bar_width = 1700  # ← はみ出し防止
+            bar_width = 1700 - 5
             bar_height = frame_height_true * 2
-            bar_shift_x = 100  # ← 2マス分右にシフト（55 * 2）
-
+            bar_shift_x = 110  # 2マス分
             draw.rectangle(
-                [(bar_x + 5 + bar_shift_x, bar_y), (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
-                fill=(0, 0, 0, 255)
+                [(bar_x + 5 + bar_shift_x, bar_y),
+                 (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
+                fill=(0, 0, 0, 128)
             )
 
         result_images.append(img)
@@ -116,7 +159,7 @@ def generate_timesheet(file_bytes):
     return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.2 🖤")
+st.title("ちゃいむしーと Web版 v1.3 ⭕️〜ー対応")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:

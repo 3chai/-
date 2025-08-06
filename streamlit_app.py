@@ -154,8 +154,6 @@ def generate_timesheet(file_bytes, preset):
                 if timing == '●' or timing == '○':
                     x_true += circle_offset_x_true
                     y_draw_true += circle_offset_y_true
-                elif timing == '×':
-                    x_true += cross_offset_x_true
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
@@ -183,7 +181,7 @@ def generate_timesheet(file_bytes, preset):
     return result_images, max_frame_num
 
 # UI
-st.title("ちゃいむしーと Web版 v1.9.1 NameError修正版＋全オフセット自動スケーリング")
+st.title("ちゃいむしーと Web版 v1.7")
 selected_preset_name = st.selectbox("会社プリセットを選択してください", list(presets.keys()))
 preset_cfg = presets[selected_preset_name]
 

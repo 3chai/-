@@ -182,7 +182,9 @@ if uploaded_file is not None:
                 data=zip_buffer,
                 file_name="timesheets_all.zip",
                 mime="application/zip"
-            )                for idx, page_img in enumerate(pages):
+            )                
+            
+            for idx, page_img in enumerate(pages):
                     st.write(f"ページ {idx+1}")
                     st.image(page_img, caption=f"Page {idx+1}", use_container_width=True)
 

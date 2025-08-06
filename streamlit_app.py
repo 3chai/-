@@ -59,10 +59,15 @@ def preprocess_cells(df_raw, valid_cells):
                     if empty_count == 0:
                         df_raw.at[idx, cell] = "×"
                         last_type = "cross"
+                    else:
+                        # 冒頭×の直後に記号予定
+                        if empty_count == 1 and last_type == "cross":
+                            insert_symbol = "~"
+                            insert_pos = idx
                     empty_count += 1
                 else:
                     if empty_count == 0:
-                        # 空き始めた直後に入れる予定の記号を決定
+                        # 数字や×の直後に記号予定
                         if last_type == "cross":
                             insert_symbol = "~"
                             insert_pos = idx
@@ -70,11 +75,13 @@ def preprocess_cells(df_raw, valid_cells):
                             insert_symbol = "-"
                             insert_pos = idx
                     empty_count += 1
-                    # 5コマ以上空いたら記号を挿入
-                    if empty_count == 5 and insert_symbol and insert_pos is not None:
-                        df_raw.at[insert_pos, cell] = insert_symbol
+
+                # 5コマ以上空いたら予定位置に記号挿入
+                if empty_count == 5 and insert_symbol and insert_pos is not None:
+                    df_raw.at[insert_pos, cell] = insert_symbol
+
             else:
-                # 中身ありに戻ったらカウンタと予定をリセット
+                # 中身ありに戻ったらリセット
                 seen_content = True
                 empty_count = 0
                 insert_symbol = None
@@ -147,7 +154,8 @@ def generate_timesheet(file_bytes):
 
                 # 縦書き描画（~、-）
                 if timing in ["~", "-"]:
-                    draw.text((x_true, y_draw_true), "\n".join(timing), fill=(0, 0, 0, 255), font=font_large)
+                    vertical_text = "\n".join(list(timing))
+                    draw.text((x_true, y_draw_true), vertical_text, fill=(0, 0, 0, 255), font=font_large)
                 else:
                     draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 
@@ -172,7 +180,7 @@ def generate_timesheet(file_bytes):
     return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.6 ~/- 即時挿入版")
+st.title("ちゃいむしーと Web版 v1.6.1 冒頭×対応＆縦書き記号")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:

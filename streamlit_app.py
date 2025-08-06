@@ -38,34 +38,32 @@ def read_csv_flexibly(file_bytes):
         return pd.DataFrame()
 
 def preprocess_cells(df_raw, valid_cells):
-    """冒頭×、5コマ以上空白で縦書き〜 or ーを入れる"""
+    """冒頭×（1コマのみ）、5コマ以上空白で縦書き〜 or ーを入れる"""
     for cell in valid_cells:
         seen_content = False
         empty_count = 0
-        last_type = None  # "cross", "number", "other"
+        last_type = None
 
         for idx, row in df_raw.iterrows():
             val = str(row[cell]).strip()
 
-            # 空欄
             if val == "" or pd.isna(row[cell]):
                 if not seen_content:
-                    # 冒頭は×
-                    df_raw.at[idx, cell] = "×"
-                    last_type = "cross"
+                    # 冒頭は最初の1コマだけ×
+                    if empty_count == 0:
+                        df_raw.at[idx, cell] = "×"
+                        last_type = "cross"
+                    empty_count += 1
                 else:
                     empty_count += 1
-                    # 5コマ目で縦書き記号
                     if empty_count == 5:
                         if last_type == "cross":
-                            df_raw.at[idx, cell] = "〜"
+                            df_raw.at[idx, cell] = "\uFF5E"  # 全角チルダ 〜
                         elif last_type == "number":
-                            df_raw.at[idx, cell] = "ー"
+                            df_raw.at[idx, cell] = "\u30FC"  # 全角長音符 ー
             else:
-                # 中身あり
                 seen_content = True
                 empty_count = 0
-
                 if val == "×":
                     last_type = "cross"
                 elif val.isdigit():
@@ -125,20 +123,20 @@ def generate_timesheet(file_bytes):
                 x_true = x_base_true if column == 0 else x_base_true + column_offset_x
                 y_draw_true = y_true + text_offset_y
 
-                # 調整
+                # 位置調整
                 if timing == '●' or timing == '○':
                     x_true += circle_offset_x_true
                     y_draw_true += circle_offset_y_true
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
-                # 縦書き記号の処理
-                if timing in ["〜", "ー"]:
+                # 縦書き描画
+                if timing in ["\uFF5E", "\u30FC"]:
                     draw.text((x_true, y_draw_true), "\n".join(list(timing)), fill=(0, 0, 0, 255), font=font_large)
                 else:
                     draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 
-        # 黒バー（太さ倍・右に2マス）
+        # 黒バー（太さ倍・右に2マス・半透明）
         if last_frame_in_page:
             frame_in_column_total = (last_frame_in_page - 1) % frames_per_page
             column = frame_in_column_total // 72
@@ -147,11 +145,11 @@ def generate_timesheet(file_bytes):
             bar_x = 0 if column == 0 else column_offset_x
             bar_width = 1700 - 5
             bar_height = frame_height_true * 2
-            bar_shift_x = 110  # 2マス分
+            bar_shift_x = 110
             draw.rectangle(
                 [(bar_x + 5 + bar_shift_x, bar_y),
                  (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
-                fill=(0, 0, 0, 128)
+                fill=(0, 0, 0, 128)  # 半透明
             )
 
         result_images.append(img)
@@ -159,7 +157,7 @@ def generate_timesheet(file_bytes):
     return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.3 ⭕️〜ー対応")
+st.title("ちゃいむしーと Web版 v1.4 ⭕️〜ー対応")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:

@@ -144,22 +144,15 @@ def generate_timesheet(file_bytes):
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
-                # 縦書き描画（~、-）
+                # 記号描画（~、- は回転して縦表示）
                 if timing in ["~", "-"]:
-                    for i, ch in enumerate(timing):
-                        draw.text(
-                            (x_true, y_draw_true + i * font_large.size),
-                            ch,
-                            fill=(0, 0, 0, 255),
-                            font=font_large
-                        )
+                    temp_img = Image.new("RGBA", (font_large.size * 2, font_large.size * 2), (0, 0, 0, 0))
+                    temp_draw = ImageDraw.Draw(temp_img)
+                    temp_draw.text((0, 0), timing, fill=(0, 0, 0, 255), font=font_large)
+                    rotated = temp_img.rotate(90, expand=True)
+                    img.paste(rotated, (int(x_true), int(y_draw_true)), rotated)
                 else:
-                    draw.text(
-                        (x_true, y_draw_true),
-                        timing,
-                        fill=(0, 0, 0, 255),
-                        font=font_large
-                    )
+                    draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 
         # 黒バー（太さ倍・右に2マス・半透明）
         if last_frame_in_page:
@@ -182,7 +175,7 @@ def generate_timesheet(file_bytes):
     return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.6.2 記号縦描画対応（修正版）")
+st.title("ちゃいむしーと Web版 v1.6.3 記号回転描画対応")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:

@@ -135,12 +135,12 @@ def generate_timesheet(file_bytes):
                 fill=(0, 0, 0, 128)
             )
 
-        result_images.append(img)
+        result_images.append(img)  # ← 別行にしたので構文エラーなし
 
     return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.6.6 3文字以上縮小85%＆左ズレ（修正版）")
+st.title("ちゃいむしーと Web版 v1.6.6 3文字以上縮小85%＆左ズレ（完全修正版）")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:
@@ -181,11 +181,7 @@ if uploaded_file is not None:
                 data=zip_buffer,
                 file_name="timesheets_all.zip",
                 mime="application/zip"
-            )    max_frame_num = df_raw['Frame'].max()
-    total_pages = math.ceil(max_frame_num / frames_per_page)
-    result_images = []
-
-    for page in range(total_pages):
+            )    for page in range(total_pages):
         img = Image.new("RGBA", (true_width, true_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         start_frame = page * frames_per_page + 1

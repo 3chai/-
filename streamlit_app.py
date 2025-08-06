@@ -15,12 +15,13 @@ text_offset_y = 4
 circle_offset_x_true = -5
 circle_offset_y_true = -2
 alphabet_offset_x_true = -13
-cross_offset_x_true = -5  # × の左ズレ
+cross_offset_x_true = -10  # × の左ズレ
 
 # フォント
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
 font_size_true = int(12 / (1086 / 3508))
 font_large = ImageFont.truetype(font_path, size=font_size_true)
+font_small = ImageFont.truetype(font_path, size=int(font_size_true * 0.9))  # 小さめ
 
 def clean_frame_column(series):
     series = series.astype(str).str.strip().map(lambda x: unicodedata.normalize("NFKC", x))
@@ -48,9 +49,8 @@ def preprocess_cells(df_raw, valid_cells):
             val = str(row[cell]).strip()
             if val == "" or pd.isna(row[cell]):
                 if not seen_content:
-                    # 冒頭1コマだけ×
                     df_raw.at[idx, cell] = "×"
-                    seen_content = True  # 以降は空欄のまま
+                    seen_content = True
             else:
                 seen_content = True
     return df_raw
@@ -113,7 +113,11 @@ def generate_timesheet(file_bytes):
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
-                draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
+                # ★ 3文字以上は小さく＆左に10pxずらす
+                if len(timing) >= 3:
+                    draw.text((x_true - 10, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_small)
+                else:
+                    draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 
         # 黒バー
         if last_frame_in_page:
@@ -136,7 +140,7 @@ def generate_timesheet(file_bytes):
     return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.6.4")
+st.title("ちゃいむしーと Web版 v1.6.5 3文字以上縮小＆左ズレ")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:

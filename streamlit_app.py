@@ -6,21 +6,23 @@ import math, re, io, os, unicodedata, zipfile
 # 列オフセット
 cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
 
-# プリセット辞書（必要に応じて追加）
+# プリセット辞書（true_heightも追加）
 presets = {
     "標準": {
         "first_frame_top_y_true": 1278.67,
         "frame_height_true": 49.5,
         "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1690,
-        "true_width": 3508
+        "true_width": 3508,
+        "true_height": 4961
     },
     "推しの子": {
         "first_frame_top_y_true": 468,
         "frame_height_true": 30,
-        "cell_x_positions_true": {cell: 57 + 28 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 57 + 54 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 870,
-        "true_width": 1754
+        "true_width": 1754,
+        "true_height": 2480
     }
 }
 
@@ -79,6 +81,7 @@ def generate_timesheet(file_bytes, preset):
     cell_x_positions_true = preset["cell_x_positions_true"]
     column_offset_x = preset["column_offset_x"]
     true_width = preset["true_width"]
+    true_height = preset["true_height"]
 
     # スケーリング係数
     scale_factor_h = frame_height_true / BASE_FRAME_HEIGHT
@@ -180,7 +183,7 @@ def generate_timesheet(file_bytes, preset):
     return result_images, max_frame_num
 
 # UI
-st.title("ちゃいむしーと Web版 v1.9.0 プリセット＋全オフセット自動スケーリング")
+st.title("ちゃいむしーと Web版 v1.9.1 NameError修正版＋全オフセット自動スケーリング")
 selected_preset_name = st.selectbox("会社プリセットを選択してください", list(presets.keys()))
 preset_cfg = presets[selected_preset_name]
 

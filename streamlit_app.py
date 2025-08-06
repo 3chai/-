@@ -3,25 +3,37 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import math, re, io, os, unicodedata, zipfile
 
-# 定数
-true_width, true_height = 3508, 4961
-frames_per_page = 144
-frame_height_true = 49.5
-first_frame_top_y_true = 1278.67
+# 列オフセット
 cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
-cell_x_positions_true = {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()}
-column_offset_x = 1800 - 110
+
+# プリセット辞書（必要に応じて追加）
+presets = {
+    "標準": {
+        "first_frame_top_y_true": 1278.67,
+        "frame_height_true": 49.5,
+        "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1690
+    },
+    "推しの子": {
+        "first_frame_top_y_true": 468,
+        "frame_height_true": 30,
+        "cell_x_positions_true": {cell: 57 + 54 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 870
+    }
+}
+
+# 固定パラメータ
+true_width, true_height = 3508, 4961
 text_offset_y = 4
 circle_offset_x_true = -5
 circle_offset_y_true = -2
 alphabet_offset_x_true = -13
 cross_offset_x_true = -10  # × の左ズレ
+BASE_FRAME_HEIGHT = 49.5  # 標準テンプレの1コマ高さ
 
-# フォント
+# フォントパス
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
-font_size_true = int(12 / (1086 / 3508))
-font_large = ImageFont.truetype(font_path, size=font_size_true)
-font_small = ImageFont.truetype(font_path, size=int(font_size_true * 0.85))  # 小さめ
+font_size_true = int(12 / (1086 / 3508))  # 基準フォントサイズ
 
 def clean_frame_column(series):
     series = series.astype(str).str.strip().map(lambda x: unicodedata.normalize("NFKC", x))
@@ -55,7 +67,19 @@ def preprocess_cells(df_raw, valid_cells):
                 seen_content = True
     return df_raw
 
-def generate_timesheet(file_bytes):
+def generate_timesheet(file_bytes, preset):
+    # プリセット読み込み
+    first_frame_top_y_true = preset["first_frame_top_y_true"]
+    frame_height_true = preset["frame_height_true"]
+    cell_x_positions_true = preset["cell_x_positions_true"]
+    column_offset_x = preset["column_offset_x"]
+
+    # フォントスケーリング
+    scale_factor = frame_height_true / BASE_FRAME_HEIGHT
+    font_large_scaled = ImageFont.truetype(font_path, size=int(font_size_true * scale_factor))
+    font_small_scaled = ImageFont.truetype(font_path, size=int(font_size_true * 0.9 * scale_factor))
+
+    # CSV読み込み
     df_raw = read_csv_flexibly(file_bytes)
     if df_raw.empty or 'Frame' not in df_raw.columns:
         return [], 0
@@ -77,6 +101,7 @@ def generate_timesheet(file_bytes):
     df_raw = preprocess_cells(df_raw, valid_cells)
 
     max_frame_num = df_raw['Frame'].max()
+    frames_per_page = 144
     total_pages = math.ceil(max_frame_num / frames_per_page)
     result_images = []
 
@@ -113,11 +138,11 @@ def generate_timesheet(file_bytes):
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
-                # ★ 3文字以上は小さく＆左に10pxずらす
+                # 3文字以上は小さく
                 if len(timing) >= 3:
-                    draw.text((x_true - 10, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_small)
+                    draw.text((x_true - 10, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_small_scaled)
                 else:
-                    draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
+                    draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large_scaled)
 
         # 黒バー
         if last_frame_in_page:
@@ -139,13 +164,16 @@ def generate_timesheet(file_bytes):
 
     return result_images, max_frame_num
 
-# Streamlit UI
-st.title("ちゃいむしーと Web版 v1.6")
+# UI
+st.title("ちゃいむしーと Web版 v1.8.0 プリセット＋自動文字サイズ調整")
+selected_preset_name = st.selectbox("会社プリセットを選択してください", list(presets.keys()))
+preset_cfg = presets[selected_preset_name]
+
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:
     if st.button("タイムシート生成！"):
-        pages, total_frames = generate_timesheet(uploaded_file.read())
+        pages, total_frames = generate_timesheet(uploaded_file.read(), preset_cfg)
 
         if not pages:
             st.warning("有効なFrameデータが見つかりませんでした。")

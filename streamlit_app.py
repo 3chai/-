@@ -15,6 +15,7 @@ text_offset_y = 4
 circle_offset_x_true = -5
 circle_offset_y_true = -2
 alphabet_offset_x_true = -13
+cross_offset_x_true = -10  # × の左ズレ
 
 # フォント
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
@@ -38,54 +39,20 @@ def read_csv_flexibly(file_bytes):
         return pd.DataFrame()
 
 def preprocess_cells(df_raw, valid_cells):
-    """冒頭×（1コマのみ）、全空欄列スキップ、5コマ以上空きは直後のコマに~/-"""
+    """冒頭×（1コマのみ）、全空欄列は空のまま"""
     for cell in valid_cells:
         if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
             continue
-
         seen_content = False
-        empty_count = 0
-        last_type = None
-        insert_symbol = None
-        insert_pos = None
-
         for idx, row in df_raw.iterrows():
             val = str(row[cell]).strip()
-
             if val == "" or pd.isna(row[cell]):
                 if not seen_content:
-                    if empty_count == 0:
-                        df_raw.at[idx, cell] = "×"
-                        last_type = "cross"
-                    else:
-                        if empty_count == 1 and last_type == "cross":
-                            insert_symbol = "~"
-                            insert_pos = idx
-                    empty_count += 1
-                else:
-                    if empty_count == 0:
-                        if last_type == "cross":
-                            insert_symbol = "~"
-                            insert_pos = idx
-                        elif last_type == "number":
-                            insert_symbol = "-"
-                            insert_pos = idx
-                    empty_count += 1
-
-                if empty_count == 5 and insert_symbol and insert_pos is not None:
-                    df_raw.at[insert_pos, cell] = insert_symbol
-
+                    # 冒頭1コマだけ×
+                    df_raw.at[idx, cell] = "×"
+                    seen_content = True  # 以降は空欄のまま
             else:
                 seen_content = True
-                empty_count = 0
-                insert_symbol = None
-                insert_pos = None
-                if val == "×":
-                    last_type = "cross"
-                elif val.isdigit():
-                    last_type = "number"
-                else:
-                    last_type = "other"
     return df_raw
 
 def generate_timesheet(file_bytes):
@@ -141,20 +108,14 @@ def generate_timesheet(file_bytes):
                 if timing == '●' or timing == '○':
                     x_true += circle_offset_x_true
                     y_draw_true += circle_offset_y_true
+                elif timing == '×':
+                    x_true += cross_offset_x_true
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
-                # 記号描画（~、- は回転して縦表示）
-                if timing in ["~", "-"]:
-                    temp_img = Image.new("RGBA", (font_large.size * 2, font_large.size * 2), (0, 0, 0, 0))
-                    temp_draw = ImageDraw.Draw(temp_img)
-                    temp_draw.text((0, 0), timing, fill=(0, 0, 0, 255), font=font_large)
-                    rotated = temp_img.rotate(90, expand=True)
-                    img.paste(rotated, (int(x_true), int(y_draw_true)), rotated)
-                else:
-                    draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
+                draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 
-        # 黒バー（太さ倍・右に2マス・半透明）
+        # 黒バー
         if last_frame_in_page:
             frame_in_column_total = (last_frame_in_page - 1) % frames_per_page
             column = frame_in_column_total // 72
@@ -167,7 +128,7 @@ def generate_timesheet(file_bytes):
             draw.rectangle(
                 [(bar_x + 5 + bar_shift_x, bar_y),
                  (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
-                fill=(0, 0, 0, 128)  # 半透明
+                fill=(0, 0, 0, 128)
             )
 
         result_images.append(img)
@@ -175,7 +136,7 @@ def generate_timesheet(file_bytes):
     return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.6.3 記号回転描画対応")
+st.title("ちゃいむしーと Web版 v1.6.4")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:

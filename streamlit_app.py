@@ -38,7 +38,7 @@ def read_csv_flexibly(file_bytes):
         return pd.DataFrame()
 
 def preprocess_cells(df_raw, valid_cells):
-    """冒頭×（1コマのみ）、5コマ以上空白で縦書き～ or ーを入れる、全空欄列はスキップ"""
+    """冒頭×（1コマのみ）、全空欄列スキップ、5コマ以上空きは直後のコマに~/-"""
     for cell in valid_cells:
         # 列が全部空欄ならスキップ
         if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
@@ -47,28 +47,38 @@ def preprocess_cells(df_raw, valid_cells):
         seen_content = False
         empty_count = 0
         last_type = None
+        insert_symbol = None
+        insert_pos = None
 
         for idx, row in df_raw.iterrows():
             val = str(row[cell]).strip()
 
             if val == "" or pd.isna(row[cell]):
                 if not seen_content:
-                    # 冒頭は最初の1コマだけ×
+                    # 冒頭は1コマだけ×
                     if empty_count == 0:
                         df_raw.at[idx, cell] = "×"
                         last_type = "cross"
                     empty_count += 1
                 else:
-                    empty_count += 1
-                    # 5コマ目に縦書き記号
-                    if empty_count == 5:
+                    if empty_count == 0:
+                        # 空き始めた直後に入れる予定の記号を決定
                         if last_type == "cross":
-                            df_raw.at[idx, cell] = "～"  # 全角チルダ
+                            insert_symbol = "~"
+                            insert_pos = idx
                         elif last_type == "number":
-                            df_raw.at[idx, cell] = "ー"  # 全角長音符
+                            insert_symbol = "-"
+                            insert_pos = idx
+                    empty_count += 1
+                    # 5コマ以上空いたら記号を挿入
+                    if empty_count == 5 and insert_symbol and insert_pos is not None:
+                        df_raw.at[insert_pos, cell] = insert_symbol
             else:
+                # 中身ありに戻ったらカウンタと予定をリセット
                 seen_content = True
                 empty_count = 0
+                insert_symbol = None
+                insert_pos = None
                 if val == "×":
                     last_type = "cross"
                 elif val.isdigit():
@@ -97,7 +107,7 @@ def generate_timesheet(file_bytes):
 
     valid_cells = [cell for cell in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] if cell in df_raw.columns]
 
-    # 冒頭× & 空白5コマ縦記号処理
+    # 前処理
     df_raw = preprocess_cells(df_raw, valid_cells)
 
     max_frame_num = df_raw['Frame'].max()
@@ -135,8 +145,8 @@ def generate_timesheet(file_bytes):
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
-                # 縦書き描画（～、ー）
-                if timing in ["～", "ー"]:
+                # 縦書き描画（~、-）
+                if timing in ["~", "-"]:
                     draw.text((x_true, y_draw_true), "\n".join(timing), fill=(0, 0, 0, 255), font=font_large)
                 else:
                     draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
@@ -162,7 +172,7 @@ def generate_timesheet(file_bytes):
     return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.5 全空欄スキップ＆文字化け対策")
+st.title("ちゃいむしーと Web版 v1.6 ~/- 即時挿入版")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:

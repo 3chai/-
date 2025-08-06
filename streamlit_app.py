@@ -38,8 +38,12 @@ def read_csv_flexibly(file_bytes):
         return pd.DataFrame()
 
 def preprocess_cells(df_raw, valid_cells):
-    """冒頭×（1コマのみ）、5コマ以上空白で縦書き〜 or ーを入れる"""
+    """冒頭×（1コマのみ）、5コマ以上空白で縦書き～ or ーを入れる、全空欄列はスキップ"""
     for cell in valid_cells:
+        # 列が全部空欄ならスキップ
+        if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
+            continue
+
         seen_content = False
         empty_count = 0
         last_type = None
@@ -56,11 +60,12 @@ def preprocess_cells(df_raw, valid_cells):
                     empty_count += 1
                 else:
                     empty_count += 1
+                    # 5コマ目に縦書き記号
                     if empty_count == 5:
                         if last_type == "cross":
-                            df_raw.at[idx, cell] = "\uFF5E"  # 全角チルダ 〜
+                            df_raw.at[idx, cell] = "～"  # 全角チルダ
                         elif last_type == "number":
-                            df_raw.at[idx, cell] = "\u30FC"  # 全角長音符 ー
+                            df_raw.at[idx, cell] = "ー"  # 全角長音符
             else:
                 seen_content = True
                 empty_count = 0
@@ -130,9 +135,9 @@ def generate_timesheet(file_bytes):
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
-                # 縦書き描画
-                if timing in ["\uFF5E", "\u30FC"]:
-                    draw.text((x_true, y_draw_true), "\n".join(list(timing)), fill=(0, 0, 0, 255), font=font_large)
+                # 縦書き描画（～、ー）
+                if timing in ["～", "ー"]:
+                    draw.text((x_true, y_draw_true), "\n".join(timing), fill=(0, 0, 0, 255), font=font_large)
                 else:
                     draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 
@@ -157,7 +162,7 @@ def generate_timesheet(file_bytes):
     return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.4 ⭕️〜ー対応")
+st.title("ちゃいむしーと Web版 v1.5 全空欄スキップ＆文字化け対策")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:

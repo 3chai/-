@@ -8,7 +8,7 @@ cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
 
 # プリセット辞書（true_heightも追加）
 presets = {
-    "A社": {
+    "標準": {
         "first_frame_top_y_true": 1278.67,
         "frame_height_true": 49.5,
         "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
@@ -32,7 +32,7 @@ BASE_WIDTH = 3508
 BASE_CIRCLE_OFFSET_X = -5
 BASE_CIRCLE_OFFSET_Y = -2
 BASE_ALPHABET_OFFSET_X = -13
-BASE_CROSS_OFFSET_X = -10
+BASE_CROSS_OFFSET_X = -6  # 数字基準から6px左に寄せ
 BASE_BAR_WIDTH = 1620
 BASE_BAR_SHIFT_X = 88
 
@@ -91,7 +91,7 @@ def generate_timesheet(file_bytes, preset):
     circle_offset_x_true = BASE_CIRCLE_OFFSET_X * scale_factor_w
     circle_offset_y_true = BASE_CIRCLE_OFFSET_Y * scale_factor_h
     alphabet_offset_x_true = BASE_ALPHABET_OFFSET_X * scale_factor_w
-    cross_offset_x_true = BASE_CROSS_OFFSET_X * scale_factor_w
+    cross_offset_x_true = BASE_CROSS_OFFSET_X * scale_factor_w  # 微調整版
 
     bar_width = BASE_BAR_WIDTH * scale_factor_w
     bar_shift_x = BASE_BAR_SHIFT_X * scale_factor_w
@@ -150,10 +150,12 @@ def generate_timesheet(file_bytes, preset):
                 x_true = x_base_true if column == 0 else x_base_true + column_offset_x
                 y_draw_true = y_true + text_offset_y
 
-                # 位置調整（スケーリング後オフセット適用）
+                # 位置調整
                 if timing == '●' or timing == '○':
                     x_true += circle_offset_x_true
                     y_draw_true += circle_offset_y_true
+                elif timing == '×':
+                    x_true += cross_offset_x_true  # 数字基準から少し左寄せ
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
@@ -163,7 +165,7 @@ def generate_timesheet(file_bytes, preset):
                 else:
                     draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large_scaled)
 
-        # 黒バー（スケーリング対応）
+        # 黒バー
         if last_frame_in_page:
             frame_in_column_total = (last_frame_in_page - 1) % frames_per_page
             column = frame_in_column_total // 72
@@ -181,7 +183,7 @@ def generate_timesheet(file_bytes, preset):
     return result_images, max_frame_num
 
 # UI
-st.title("ちゃいむしーと Web版 v1.7")
+st.title("ちゃいむしーと Web版 v1.9.2 ×位置微調整（数字基準より6px左）")
 selected_preset_name = st.selectbox("会社プリセットを選択してください", list(presets.keys()))
 preset_cfg = presets[selected_preset_name]
 

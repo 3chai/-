@@ -262,7 +262,9 @@ if uploaded_file is not None:
                 data=zip_buffer,
                 file_name="timesheets_all.zip",
                 mime="application/zip"
-            )    max_frame_num = df_raw['Frame'].max()
+            )    
+            
+            max_frame_num = df_raw['Frame'].max()
     total_pages = math.ceil(max_frame_num / frames_per_page)
     result_images = []
 
@@ -367,7 +369,9 @@ if uploaded_file is not None:
                 data=zip_buffer,
                 file_name="timesheets_all.zip",
                 mime="application/zip"
-            )    max_frame_num = df_raw['Frame'].max()
+            )    
+            
+            max_frame_num = df_raw['Frame'].max()
     total_pages = math.ceil(max_frame_num / frames_per_page)
     result_images = []
 
@@ -473,7 +477,9 @@ if uploaded_file is not None:
                 data=zip_buffer,
                 file_name="timesheets_all.zip",
                 mime="application/zip"
-            )    max_frame_num = df_raw['Frame'].max()
+            )    
+            
+            max_frame_num = df_raw['Frame'].max()
     total_pages = math.ceil(max_frame_num / frames_per_page)
     result_images = []
 
@@ -578,7 +584,9 @@ if uploaded_file is not None:
                 data=zip_buffer,
                 file_name="timesheets_all.zip",
                 mime="application/zip"
-            )    for page in range(total_pages):
+            )    
+            
+            for page in range(total_pages):
         img = Image.new("RGBA", (true_width, true_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         start_frame = page * frames_per_page + 1

@@ -21,7 +21,7 @@ cross_offset_x_true = -10  # × の左ズレ
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
 font_size_true = int(12 / (1086 / 3508))
 font_large = ImageFont.truetype(font_path, size=font_size_true)
-font_small = ImageFont.truetype(font_path, size=int(font_size_true * 0.85))  # 小さめ
+font_small = ImageFont.truetype(font_path, size=int(font_size_true * 0.8))  # 小さめ
 
 def clean_frame_column(series):
     series = series.astype(str).str.strip().map(lambda x: unicodedata.normalize("NFKC", x))

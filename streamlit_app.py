@@ -183,7 +183,7 @@ def generate_timesheet(file_bytes, preset):
     return result_images, max_frame_num
 
 # UI
-st.title("ちゃいむしーと Web版 v1.9.2 ×位置微調整（数字基準より6px左）")
+st.title("ちゃいむしーと Web版 v1.7")
 selected_preset_name = st.selectbox("会社プリセットを選択してください", list(presets.keys()))
 preset_cfg = presets[selected_preset_name]
 

@@ -140,7 +140,7 @@ def generate_timesheet(file_bytes):
     return result_images, max_frame_num
 
 # Streamlit UI
-st.title("ちゃいむしーと Web版 v1.6.5 3文字以上縮小＆左ズレ")
+st.title("ちゃいむしーと Web版 v1.6")
 uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:

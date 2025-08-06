@@ -154,4 +154,73 @@ def generate_timesheet(file_bytes):
                             font=font_large
                         )
                 else:
-                   
+                    draw.text(
+                        (x_true, y_draw_true),
+                        timing,
+                        fill=(0, 0, 0, 255),
+                        font=font_large
+                    )
+
+        # 黒バー（太さ倍・右に2マス・半透明）
+        if last_frame_in_page:
+            frame_in_column_total = (last_frame_in_page - 1) % frames_per_page
+            column = frame_in_column_total // 72
+            frame_in_column = frame_in_column_total % 72
+            bar_y = first_frame_top_y_true + (frame_in_column + 1) * frame_height_true
+            bar_x = 0 if column == 0 else column_offset_x
+            bar_width = 1700 - 5
+            bar_height = frame_height_true * 2
+            bar_shift_x = 110
+            draw.rectangle(
+                [(bar_x + 5 + bar_shift_x, bar_y),
+                 (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
+                fill=(0, 0, 0, 128)  # 半透明
+            )
+
+        result_images.append(img)
+
+    return result_images, max_frame_num
+
+# Streamlit UI
+st.title("ちゃいむしーと Web版 v1.6.2 記号縦描画対応（修正版）")
+uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
+
+if uploaded_file is not None:
+    if st.button("タイムシート生成！"):
+        pages, total_frames = generate_timesheet(uploaded_file.read())
+
+        if not pages:
+            st.warning("有効なFrameデータが見つかりませんでした。")
+        else:
+            seconds = total_frames // 24
+            remainder = total_frames % 24
+            time_str = f"{seconds} + {remainder}"
+            st.text_input("TIME", value=time_str)
+
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for idx, page_img in enumerate(pages):
+                    st.write(f"ページ {idx+1}")
+                    st.image(page_img, caption=f"Page {idx+1}", use_container_width=True)
+
+                    img_bytes = io.BytesIO()
+                    page_img.save(img_bytes, format='PNG')
+                    img_bytes.seek(0)
+
+                    filename = f"timesheet_page_{idx+1}.png"
+                    zip_file.writestr(filename, img_bytes.getvalue())
+
+                    st.download_button(
+                        label=f"⬇️ ダウンロード Page {idx+1}",
+                        data=img_bytes,
+                        file_name=filename,
+                        mime="image/png"
+                    )
+
+            zip_buffer.seek(0)
+            st.download_button(
+                label="📦 すべてまとめてダウンロード（ZIP）",
+                data=zip_buffer,
+                file_name="timesheets_all.zip",
+                mime="application/zip"
+            )

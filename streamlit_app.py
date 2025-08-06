@@ -12,26 +12,31 @@ presets = {
         "first_frame_top_y_true": 1278.67,
         "frame_height_true": 49.5,
         "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 1690
+        "column_offset_x": 1690,
+        "true_width": 3508
     },
     "推しの子": {
         "first_frame_top_y_true": 468,
-        "frame_height_true": 29.5,
-        "cell_x_positions_true": {cell: 57 + 29 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 870
+        "frame_height_true": 30,
+        "cell_x_positions_true": {cell: 57 + 28 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 870,
+        "true_width": 1754
     }
 }
 
-# 固定パラメータ
-true_width, true_height = 3508, 4961
-text_offset_y = 4
-circle_offset_x_true = -5
-circle_offset_y_true = -2
-alphabet_offset_x_true = -13
-cross_offset_x_true = -10  # × の左ズレ
-BASE_FRAME_HEIGHT = 49.5  # 標準テンプレの1コマ高さ
+# 固定パラメータ（基準値）
+BASE_FRAME_HEIGHT = 49.5
+BASE_WIDTH = 3508
+BASE_CIRCLE_OFFSET_X = -5
+BASE_CIRCLE_OFFSET_Y = -2
+BASE_ALPHABET_OFFSET_X = -13
+BASE_CROSS_OFFSET_X = -10
+BASE_BAR_WIDTH = 1620
+BASE_BAR_SHIFT_X = 88
 
-# フォントパス
+text_offset_y = 4
+
+# フォント
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
 font_size_true = int(12 / (1086 / 3508))  # 基準フォントサイズ
 
@@ -73,11 +78,24 @@ def generate_timesheet(file_bytes, preset):
     frame_height_true = preset["frame_height_true"]
     cell_x_positions_true = preset["cell_x_positions_true"]
     column_offset_x = preset["column_offset_x"]
+    true_width = preset["true_width"]
+
+    # スケーリング係数
+    scale_factor_h = frame_height_true / BASE_FRAME_HEIGHT
+    scale_factor_w = true_width / BASE_WIDTH
+
+    # オフセットもスケーリング
+    circle_offset_x_true = BASE_CIRCLE_OFFSET_X * scale_factor_w
+    circle_offset_y_true = BASE_CIRCLE_OFFSET_Y * scale_factor_h
+    alphabet_offset_x_true = BASE_ALPHABET_OFFSET_X * scale_factor_w
+    cross_offset_x_true = BASE_CROSS_OFFSET_X * scale_factor_w
+
+    bar_width = BASE_BAR_WIDTH * scale_factor_w
+    bar_shift_x = BASE_BAR_SHIFT_X * scale_factor_w
 
     # フォントスケーリング
-    scale_factor = frame_height_true / BASE_FRAME_HEIGHT
-    font_large_scaled = ImageFont.truetype(font_path, size=int(font_size_true * scale_factor))
-    font_small_scaled = ImageFont.truetype(font_path, size=int(font_size_true * 0.9 * scale_factor))
+    font_large_scaled = ImageFont.truetype(font_path, size=int(font_size_true * scale_factor_h))
+    font_small_scaled = ImageFont.truetype(font_path, size=int(font_size_true * 0.9 * scale_factor_h))
 
     # CSV読み込み
     df_raw = read_csv_flexibly(file_bytes)
@@ -129,7 +147,7 @@ def generate_timesheet(file_bytes, preset):
                 x_true = x_base_true if column == 0 else x_base_true + column_offset_x
                 y_draw_true = y_true + text_offset_y
 
-                # 位置調整
+                # 位置調整（スケーリング後オフセット適用）
                 if timing == '●' or timing == '○':
                     x_true += circle_offset_x_true
                     y_draw_true += circle_offset_y_true
@@ -140,23 +158,20 @@ def generate_timesheet(file_bytes, preset):
 
                 # 3文字以上は小さく
                 if len(timing) >= 3:
-                    draw.text((x_true - 10, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_small_scaled)
+                    draw.text((x_true - 10 * scale_factor_w, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_small_scaled)
                 else:
                     draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large_scaled)
 
-        # 黒バー
+        # 黒バー（スケーリング対応）
         if last_frame_in_page:
             frame_in_column_total = (last_frame_in_page - 1) % frames_per_page
             column = frame_in_column_total // 72
             frame_in_column = frame_in_column_total % 72
             bar_y = first_frame_top_y_true + (frame_in_column + 1) * frame_height_true
             bar_x = 0 if column == 0 else column_offset_x
-            bar_width = 1620
-            bar_height = frame_height_true * 2
-            bar_shift_x = 88
             draw.rectangle(
                 [(bar_x + 5 + bar_shift_x, bar_y),
-                 (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
+                 (bar_x + 5 + bar_shift_x + bar_width, bar_y + frame_height_true * 2)],
                 fill=(0, 0, 0, 128)
             )
 
@@ -165,7 +180,7 @@ def generate_timesheet(file_bytes, preset):
     return result_images, max_frame_num
 
 # UI
-st.title("ちゃいむしーと Web版 v1.8.0 プリセット＋自動文字サイズ調整")
+st.title("ちゃいむしーと Web版 v1.9.0 プリセット＋全オフセット自動スケーリング")
 selected_preset_name = st.selectbox("会社プリセットを選択してください", list(presets.keys()))
 preset_cfg = presets[selected_preset_name]
 

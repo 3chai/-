@@ -124,7 +124,7 @@ def generate_timesheet(file_bytes):
             bar_x = 0 if column == 0 else column_offset_x
             bar_width = 1620
             bar_height = frame_height_true * 2
-            bar_shift_x = 100
+            bar_shift_x = 90
             draw.rectangle(
                 [(bar_x + 5 + bar_shift_x, bar_y),
                  (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],

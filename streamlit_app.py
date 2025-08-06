@@ -15,7 +15,7 @@ text_offset_y = 4
 circle_offset_x_true = -5
 circle_offset_y_true = -2
 alphabet_offset_x_true = -13
-cross_offset_x_true = -10  # × の左ズレ
+cross_offset_x_true = -5  # × の左ズレ
 
 # フォント
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")

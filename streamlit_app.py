@@ -175,3 +175,60 @@ def generate_timesheet(file_bytes, preset_cfg):
         result_images.append(img)
 
     return result_images, max_frame_num
+    import streamlit as st
+import io
+import zipfile
+from PIL import Image
+
+# 他の import や定数、プリセット、generate_timesheet 関数などはすでにある前提！
+
+# タイトル
+st.title("ちゃいむしーと Web版 📄✨")
+
+# プリセット選択
+preset_name = st.selectbox("タイムシート形式を選んでね", ["Andraft", "動画工房"])
+preset_cfg = presets[preset_name]
+
+# ファイルアップロード
+uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
+
+if uploaded_file is not None:
+    if st.button("🧙 タイムシート生成！"):
+        pages, total_frames = generate_timesheet(uploaded_file.read(), preset_cfg)
+
+        if not pages:
+            st.warning("有効なFrameデータが見つかりませんでした。")
+        else:
+            # 上部にTIME欄の表示
+            seconds = total_frames // 24
+            remainder = total_frames % 24
+            time_str = f"{seconds} + {remainder}"
+            st.text_input("TIME（合計コマ数から自動計算）", value=time_str)
+
+            # ZIP作成と個別表示
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for idx, page_img in enumerate(pages):
+                    st.image(page_img, caption=f"Page {idx+1}", use_container_width=True)
+
+                    img_bytes = io.BytesIO()
+                    page_img.save(img_bytes, format="PNG")
+                    img_bytes.seek(0)
+
+                    filename = f"timesheet_page_{idx+1}.png"
+                    zip_file.writestr(filename, img_bytes.getvalue())
+
+                    st.download_button(
+                        label=f"⬇️ ダウンロード Page {idx+1}",
+                        data=img_bytes,
+                        file_name=filename,
+                        mime="image/png"
+                    )
+
+            zip_buffer.seek(0)
+            st.download_button(
+                label="📦 すべてまとめてダウンロード（ZIP）",
+                data=zip_buffer,
+                file_name="timesheets_all.zip",
+                mime="application/zip"
+            )

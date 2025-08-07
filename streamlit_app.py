@@ -3,30 +3,24 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import math, re, io, os, unicodedata, zipfile
 
-# === プリセット ===
-PRESETS = {
-    "ちゃいむしーと (EXCEL原本)": {
-        "width": 3508,
-        "height": 4961,
-        "dpi": 300,
-        "first_frame_top_y": 1278.67,
-        "frame_height": 49.5,
+# プリセット辞書（true_heightも追加）
+presets = {
+    "Andraft": {
+        "first_frame_top_y_true": 1278.67,
+        "frame_height_true": 49.5,
+        "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1690,
-        "cell_base_x": 110,
-        "cell_spacing": 55,
-        "black_bar_alpha": 128,
+        "true_width": 3508,
+        "true_height": 4961
     },
-    "Andraftシート": {
-        "width": 1754,
-        "height": 2480,
-        "dpi": 150,
-        "first_frame_top_y": 468,
-        "frame_height": 30,
+    "動画工房": {
+        "first_frame_top_y_true": 468,
+        "frame_height_true": 27.25,
+        "cell_x_positions_true": {cell: 51.7 + 29 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 870,
-        "cell_base_x": 57,
-        "cell_spacing": 55,
-        "black_bar_alpha": 255,
-    },
+        "true_width": 1754,
+        "true_height": 2480
+    }
 }
 
 # === ユーティリティ ===

@@ -1,111 +1,144 @@
-Timesheet Book Insert
-142
-143
-144
-145
-146
-147
-148
-149
-150
-151
-152
-153
-154
-155
-156
-157
-158
-159
-160
-161
-162
-163
-164
-165
-166
-167
-168
-169
-170
-171
-172
-173
-174
-175
-176
-177
-178
-179
-180
-181
-182
-183
-184
-185
-186
-187
-188
-189
-190
-191
-192
-193
-194
-195
-196
-197
-198
-199
-200
-201
-202
-203
-204
-205
-206
-207
-208
-209
-210
-211
-212
-213
-214
-215
-216
-217
-218
-219
-220
-221
-222
-223
-224
-225
-226
-227
-228
-229
-230
-231
-232
-233
-234
-235
-236
-237
-238
-239
-240
-241
-242
-243
-244
-245
-246
-247
-248
+import streamlit as st
+import pandas as pd
+from PIL import Image, ImageDraw, ImageFont
+import math, re, io, os, unicodedata, zipfile
+
+# 列オフセット
+cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
+
+# プリセット辞書（true_heightも追加）
+presets = {
+    "Andraft": {
+        "first_frame_top_y_true": 1278.67,
+        "frame_height_true": 49.5,
+        "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1690,
+        "true_width": 3508,
+        "true_height": 4961
+    },
+    "動画工房": {
+        "first_frame_top_y_true": 468,
+        "frame_height_true": 27.25,
+        "cell_x_positions_true": {cell: 51.7 + 29 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 870,
+        "true_width": 1754,
+        "true_height": 2480
+    }
+}
+
+BASE_FRAME_HEIGHT = 49.5
+BASE_WIDTH = 3508
+BASE_CIRCLE_OFFSET_X = -5
+BASE_CIRCLE_OFFSET_Y = -2
+BASE_ALPHABET_OFFSET_X = -13
+BASE_CROSS_OFFSET_X = -6
+BASE_BAR_WIDTH = 1620
+BASE_BAR_SHIFT_X = 88
+text_offset_y = 4
+
+font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+font_size_true = int(12 / (1086 / 3508))
+
+
+def clean_frame_column(series):
+    series = series.astype(str).str.strip().map(lambda x: unicodedata.normalize("NFKC", x))
+    series = pd.to_numeric(series, errors='coerce')
+    return series
+
+
+def read_csv_flexibly(file_bytes):
+    try:
+        df = pd.read_csv(io.BytesIO(file_bytes), encoding="shift_jis", header=[0, 1], keep_default_na=False)
+        df.columns = [col[1] if col[1] != '' else col[0] for col in df.columns]
+        if 'Unnamed: 0_level_1' in df.columns:
+            df = df.rename(columns={'Unnamed: 0_level_1': 'Frame'})
+        return df
+    except Exception as e:
+        st.error(f"CSVの読み込みに失敗しました: {e}")
+        return pd.DataFrame()
+
+
+def preprocess_cells(df_raw, valid_cells):
+    for cell in valid_cells:
+        if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
+            continue
+        seen_content = False
+        for idx, row in df_raw.iterrows():
+            val = str(row[cell]).strip()
+            if val == "" or pd.isna(row[cell]):
+                if not seen_content:
+                    df_raw.at[idx, cell] = "×"
+                    seen_content = True
+            else:
+                seen_content = True
+    return df_raw
+
+
+def get_book_positions(df):
+    book_columns = [col for col in df.columns if col.startswith("_book")]
+    book_positions = {}
+    for col in book_columns:
+        idx = df.columns.get_loc(col)
+        if idx == 0:
+            insert_pos = "before_A"
+        elif idx == len(df.columns) - 1:
+            insert_pos = f"after_{df.columns[idx-1]}"
+        else:
+            left, right = df.columns[idx - 1], df.columns[idx + 1]
+            insert_pos = f"between_{left}_{right}"
+        book_positions[col] = insert_pos
+    return book_positions
+
+
+def generate_timesheet(file_bytes, preset):
+    first_frame_top_y_true = preset["first_frame_top_y_true"]
+    frame_height_true = preset["frame_height_true"]
+    cell_x_positions_true = preset["cell_x_positions_true"]
+    column_offset_x = preset["column_offset_x"]
+    true_width = preset["true_width"]
+    true_height = preset["true_height"]
+
+    scale_factor_h = frame_height_true / BASE_FRAME_HEIGHT
+    scale_factor_w = true_width / BASE_WIDTH
+    circle_offset_x_true = BASE_CIRCLE_OFFSET_X * scale_factor_w
+    circle_offset_y_true = BASE_CIRCLE_OFFSET_Y * scale_factor_h
+    alphabet_offset_x_true = BASE_ALPHABET_OFFSET_X * scale_factor_w
+    cross_offset_x_true = BASE_CROSS_OFFSET_X * scale_factor_w
+    bar_width = BASE_BAR_WIDTH * scale_factor_w
+    bar_shift_x = BASE_BAR_SHIFT_X * scale_factor_w
+
+    font_large_scaled = ImageFont.truetype(font_path, size=int(font_size_true * scale_factor_h))
+    font_small_scaled = ImageFont.truetype(font_path, size=int(font_size_true * 0.9 * scale_factor_h))
+
+    df_raw = read_csv_flexibly(file_bytes)
+    if df_raw.empty or 'Frame' not in df_raw.columns:
+        return [], 0
+
+    df_raw['Frame'] = clean_frame_column(df_raw['Frame'])
+    df_raw = df_raw.dropna(subset=['Frame'])
+    df_raw['Frame'] = df_raw['Frame'].astype(int)
+    df_raw = df_raw[df_raw['Frame'] > 0]
+    if df_raw.empty:
+        return [], 0
+
+    valid_cells = [cell for cell in cell_offsets.keys() if cell in df_raw.columns]
+    df_raw = preprocess_cells(df_raw, valid_cells)
+    book_positions = get_book_positions(df_raw)
+
+    max_frame_num = df_raw['Frame'].max()
+    frames_per_page = 144
+    total_pages = math.ceil(max_frame_num / frames_per_page)
+    result_images = []
+
+    for page in range(total_pages):
+        img = Image.new("RGBA", (true_width, true_height), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(img)
+        start_frame = page * frames_per_page + 1
+        end_frame = (page + 1) * frames_per_page
+        df_page = df_raw[(df_raw['Frame'] >= start_frame) & (df_raw['Frame'] <= end_frame)]
+        if df_page.empty:
+            continue
+
         last_frame_in_page = df_page['Frame'].max()
 
         for idx, row in df_page.iterrows():
@@ -208,9 +241,4 @@ if uploaded_file is not None:
                     )
             zip_buffer.seek(0)
             st.download_button(
-                label="📦 すべてまとめてダウンロード (ZIP)",
-                data=zip_buffer,
-                file_name="timesheets_all.zip",
-                mime="application/zip"
-            )
-
+                label="

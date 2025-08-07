@@ -3,10 +3,23 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import math, re, io, os, unicodedata, zipfile
 
-# セル定義
+# 定数（共通）
+frames_per_page = 144
 cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
+text_offset_y = 4
+circle_offset_x_true = -5
+circle_offset_y_true = -2
+alphabet_offset_x_true = -13
+cross_offset_x_true = -5
+book_gap_x = 14  # 縦書きbook表示の左右位置微調整
+book_gap_y = -5  # 縦書きbook表示の上下位置微調整
 
-# プリセット辞書
+# フォント設定
+font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+def get_font(size):
+    return ImageFont.truetype(font_path, size=size)
+
+# プリセット辞書（true_heightも追加）
 presets = {
     "Andraft": {
         "first_frame_top_y_true": 1278.67,
@@ -14,7 +27,8 @@ presets = {
         "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1690,
         "true_width": 3508,
-        "true_height": 4961
+        "true_height": 4961,
+        "font_size_true": 90
     },
     "動画工房": {
         "first_frame_top_y_true": 468,
@@ -22,27 +36,17 @@ presets = {
         "cell_x_positions_true": {cell: 51.7 + 29 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 870,
         "true_width": 1754,
-        "true_height": 2480
+        "true_height": 2480,
+        "font_size_true": 48
     }
 }
 
-# その他の定数
-text_offset_y = 4
-circle_offset_x_true = -5
-circle_offset_y_true = -2
-alphabet_offset_x_true = -13
-cross_offset_x_true = -5
-
-font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
-
-# 縦書き変換
-def to_vertical_text(text):
-    return "\n".join(text)
 
 def clean_frame_column(series):
     series = series.astype(str).str.strip().map(lambda x: unicodedata.normalize("NFKC", x))
     series = pd.to_numeric(series, errors='coerce')
     return series
+
 
 def read_csv_flexibly(file_bytes):
     try:
@@ -54,6 +58,28 @@ def read_csv_flexibly(file_bytes):
     except Exception as e:
         st.error(f"CSVの読み込みに失敗しました: {e}")
         return pd.DataFrame()
+
+
+def preprocess_cells(df_raw, valid_cells):
+    for cell in valid_cells:
+        if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
+            continue
+        seen_content = False
+        for idx, row in df_raw.iterrows():
+            val = str(row[cell]).strip()
+            if val == "" or pd.isna(row[cell]):
+                if not seen_content:
+                    df_raw.at[idx, cell] = "×"
+                    seen_content = True
+            else:
+                seen_content = True
+    return df_raw
+
+
+def draw_vertical_text(draw, text, x, y, font):
+    for i, char in enumerate(text):
+        draw.text((x, y + i * font.size), char, font=font, fill=(0, 0, 0, 255))
+
 
 def generate_timesheet(file_bytes, preset_cfg):
     df_raw = read_csv_flexibly(file_bytes)
@@ -73,24 +99,33 @@ def generate_timesheet(file_bytes, preset_cfg):
     if df_raw.empty:
         return [], 0
 
-    valid_cells = [cell for cell in cell_offsets.keys() if cell in df_raw.columns]
+    valid_cells = [cell for cell in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] if cell in df_raw.columns]
+    df_raw = preprocess_cells(df_raw, valid_cells)
 
-    # フォント設定
-    font_size_true = int(12 / (1086 / preset_cfg['true_height']))
-    font_large = ImageFont.truetype(font_path, size=font_size_true)
-
+    font_large = get_font(preset_cfg['font_size_true'])
     max_frame_num = df_raw['Frame'].max()
-    frames_per_page = 144
     total_pages = math.ceil(max_frame_num / frames_per_page)
     result_images = []
+
+    book_labels = []
+    if '_book' in df_raw.columns:
+        for val in df_raw['_book'].dropna().unique():
+            match = re.match(r"(.+?):([A-H])~([A-H])", val)
+            if match:
+                label, left, right = match.groups()
+                book_labels.append((label, left, right))
 
     for page in range(total_pages):
         img = Image.new("RGBA", (preset_cfg['true_width'], preset_cfg['true_height']), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-
         start_frame = page * frames_per_page + 1
         end_frame = (page + 1) * frames_per_page
         df_page = df_raw[(df_raw['Frame'] >= start_frame) & (df_raw['Frame'] <= end_frame)]
+
+        if not df_page.empty:
+            last_frame_in_page = df_page['Frame'].max()
+        else:
+            last_frame_in_page = None
 
         for cell in valid_cells:
             x_base_true = preset_cfg['cell_x_positions_true'][cell]
@@ -101,10 +136,9 @@ def generate_timesheet(file_bytes, preset_cfg):
                 column = frame_in_column_total // 72
                 frame_in_column = frame_in_column_total % 72
                 y_true = preset_cfg['first_frame_top_y_true'] + frame_in_column * preset_cfg['frame_height_true']
-                x_true = x_base_true + (preset_cfg['column_offset_x'] if column == 1 else 0)
+                x_true = x_base_true if column == 0 else x_base_true + preset_cfg['column_offset_x']
                 y_draw_true = y_true + text_offset_y
 
-                # 位置調整
                 if timing == '●' or timing == '○':
                     x_true += circle_offset_x_true
                     y_draw_true += circle_offset_y_true
@@ -115,31 +149,28 @@ def generate_timesheet(file_bytes, preset_cfg):
 
                 draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large)
 
-        # book列の挿入処理
-        book_count = 1
-        for _, row in df_page.iterrows():
-            frame_num = int(row['Frame'])
-            book_val = str(row['_book']).strip()
-            if book_val:
-                m = re.match(r"([A-H])\s*[-~]\s*([A-H])", book_val)
-                if not m:
-                    continue
-                cell1, cell2 = m.group(1), m.group(2)
-                offset1 = cell_offsets.get(cell1)
-                offset2 = cell_offsets.get(cell2)
-                if offset1 is None or offset2 is None:
-                    continue
-                offset_mid = (offset1 + offset2) / 2
-                x_true = 110 + 55 * offset_mid
-                frame_in_column_total = (frame_num - 1) % frames_per_page
-                column = frame_in_column_total // 72
-                frame_in_column = frame_in_column_total % 72
-                y_true = preset_cfg['first_frame_top_y_true'] + frame_in_column * preset_cfg['frame_height_true']
-                x_true += (preset_cfg['column_offset_x'] if column == 1 else 0)
-                y_draw_true = y_true + text_offset_y
-                vertical = to_vertical_text(f"book{book_count}")
-                draw.text((x_true, y_draw_true), vertical, fill=(0, 0, 0, 255), font=font_large, anchor="mm")
-                book_count += 1
+        # BOOK描画
+        for i, (label, left, right) in enumerate(book_labels):
+            x1 = preset_cfg['cell_x_positions_true'][left]
+            x2 = preset_cfg['cell_x_positions_true'][right]
+            x_mid = (x1 + x2) / 2 + book_gap_x
+            draw_vertical_text(draw, f"book{i+1}", x_mid, preset_cfg['first_frame_top_y_true'] + book_gap_y, font_large)
+
+        # 黒バー
+        if last_frame_in_page:
+            frame_in_column_total = (last_frame_in_page - 1) % frames_per_page
+            column = frame_in_column_total // 72
+            frame_in_column = frame_in_column_total % 72
+            bar_y = preset_cfg['first_frame_top_y_true'] + (frame_in_column + 1) * preset_cfg['frame_height_true']
+            bar_x = 0 if column == 0 else preset_cfg['column_offset_x']
+            bar_width = 1620
+            bar_height = preset_cfg['frame_height_true'] * 2
+            bar_shift_x = 88
+            draw.rectangle(
+                [(bar_x + 5 + bar_shift_x, bar_y),
+                 (bar_x + 5 + bar_shift_x + bar_width, bar_y + bar_height)],
+                fill=(0, 0, 0, 128)
+            )
 
         result_images.append(img)
 

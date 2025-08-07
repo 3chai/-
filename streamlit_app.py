@@ -1,12 +1,16 @@
+# streamlit_app.py（抜粋 & 完成版）
+
 import streamlit as st
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import math, re, io, os, unicodedata, zipfile
 
-# 列オフセット
+# ────────────── 基本設定 ──────────────
 cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
+font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+font_size_true = int(12 / (1086 / 3508))
 
-# プリセット辞書（true_heightも追加）
+# ────────────── プリセット ──────────────
 presets = {
     "Andraft": {
         "first_frame_top_y_true": 1278.67,
@@ -25,6 +29,63 @@ presets = {
         "true_height": 2480
     }
 }
+
+# ────────────── book挿入位置取得 ──────────────
+def get_book_positions(df):
+    book_positions = []
+    for col in df.columns:
+        if col.startswith("_book"):
+            idx = df.columns.get_loc(col)
+            if idx == 0:
+                insert_pos = f"before_{df.columns[1]}"
+            elif idx < len(df.columns) - 1:
+                insert_pos = f"between_{df.columns[idx-1]}_{df.columns[idx+1]}"
+            else:
+                insert_pos = f"after_{df.columns[idx-1]}"
+            book_positions.append((col, insert_pos))
+    return book_positions
+
+# ────────────── 縦書き描画 ──────────────
+def draw_vertical_text(draw, text, x, y, font, spacing=14):
+    for i, char in enumerate(text):
+        draw.text((x, y + i * spacing), char, fill=(0, 0, 0, 255), font=font)
+
+# ────────────── タイムシート生成（抜粋） ──────────────
+# ▼ 中略（generate_timesheet 関数など、ちゃいが使ってる既存コード）
+# draw.text の処理のあとくらいに ↓ を入れるとよい：
+
+# book挿入
+for book_col, position in get_book_positions(df_raw):
+    for _, row in df_page.iterrows():
+        frame = int(row['Frame'])
+        value = str(row.get(book_col, '')).strip()
+        if value:
+            frame_idx = (frame - 1) % frames_per_page
+            column = frame_idx // 72
+            row_in_col = frame_idx % 72
+            y_true = first_frame_top_y_true + row_in_col * frame_height_true
+
+            # 挿入位置解釈
+            if position.startswith("between_"):
+                _, left, right = position.split("_")
+                x_left = cell_x_positions_true.get(left)
+                x_right = cell_x_positions_true.get(right)
+                x_true = ((x_left + x_right) / 2 if x_left and x_right else x_left or x_right)
+            elif position.startswith("before_"):
+                col = position.replace("before_", "")
+                x_true = cell_x_positions_true.get(col, 0) - 20
+            elif position.startswith("after_"):
+                col = position.replace("after_", "")
+                x_true = cell_x_positions_true.get(col, 0) + 30
+            else:
+                x_true = 0
+
+            if column == 1:
+                x_true += column_offset_x
+
+            draw_vertical_text(draw, value, x_true, y_true, font_small_scaled)
+
+# ────────────── 続きはちゃいの既存のコードと合体させてね！ ──────────────
 
 BASE_FRAME_HEIGHT = 49.5
 BASE_WIDTH = 3508

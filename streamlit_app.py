@@ -241,4 +241,8 @@ if uploaded_file is not None:
                     )
             zip_buffer.seek(0)
             st.download_button(
-                label="
+                label="📦 すべてまとめてダウンロード (ZIP)",
+                data=zip_buffer,
+                file_name="timesheets_all.zip",
+                mime="application/zip"
+            )

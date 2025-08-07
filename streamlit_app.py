@@ -26,22 +26,20 @@ presets = {
     }
 }
 
-
 # 固定パラメータ（基準値）
 BASE_FRAME_HEIGHT = 49.5
 BASE_WIDTH = 3508
 BASE_CIRCLE_OFFSET_X = -5
 BASE_CIRCLE_OFFSET_Y = -2
 BASE_ALPHABET_OFFSET_X = -13
-BASE_CROSS_OFFSET_X = -6  # 数字基準から6px左に寄せ
+BASE_CROSS_OFFSET_X = -6
 BASE_BAR_WIDTH = 1620
 BASE_BAR_SHIFT_X = 88
 
 text_offset_y = 4
 
-# フォント
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
-font_size_true = int(12 / (1086 / 3508))  # 基準フォントサイズ
+font_size_true = int(12 / (1086 / 3508))
 
 def clean_frame_column(series):
     series = series.astype(str).str.strip().map(lambda x: unicodedata.normalize("NFKC", x))
@@ -60,7 +58,6 @@ def read_csv_flexibly(file_bytes):
         return pd.DataFrame()
 
 def preprocess_cells(df_raw, valid_cells):
-    """冒頭×（1コマのみ）、全空欄列は空のまま"""
     for cell in valid_cells:
         if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
             continue
@@ -75,8 +72,11 @@ def preprocess_cells(df_raw, valid_cells):
                 seen_content = True
     return df_raw
 
+def draw_vertical_text(draw, x, y, text, font, spacing):
+    for i, char in enumerate(text):
+        draw.text((x, y + i * spacing), char, fill=(0, 0, 0, 255), font=font)
+
 def generate_timesheet(file_bytes, preset):
-    # プリセット読み込み
     first_frame_top_y_true = preset["first_frame_top_y_true"]
     frame_height_true = preset["frame_height_true"]
     cell_x_positions_true = preset["cell_x_positions_true"]
@@ -84,24 +84,20 @@ def generate_timesheet(file_bytes, preset):
     true_width = preset["true_width"]
     true_height = preset["true_height"]
 
-    # スケーリング係数
     scale_factor_h = frame_height_true / BASE_FRAME_HEIGHT
     scale_factor_w = true_width / BASE_WIDTH
 
-    # オフセットもスケーリング
     circle_offset_x_true = BASE_CIRCLE_OFFSET_X * scale_factor_w
     circle_offset_y_true = BASE_CIRCLE_OFFSET_Y * scale_factor_h
     alphabet_offset_x_true = BASE_ALPHABET_OFFSET_X * scale_factor_w
-    cross_offset_x_true = BASE_CROSS_OFFSET_X * scale_factor_w  # 微調整版
-
+    cross_offset_x_true = BASE_CROSS_OFFSET_X * scale_factor_w
     bar_width = BASE_BAR_WIDTH * scale_factor_w
     bar_shift_x = BASE_BAR_SHIFT_X * scale_factor_w
 
-    # フォントスケーリング
     font_large_scaled = ImageFont.truetype(font_path, size=int(font_size_true * scale_factor_h))
     font_small_scaled = ImageFont.truetype(font_path, size=int(font_size_true * 0.9 * scale_factor_h))
+    font_book = ImageFont.truetype(font_path, size=int(font_size_true * 1.2 * scale_factor_h))
 
-    # CSV読み込み
     df_raw = read_csv_flexibly(file_bytes)
     if df_raw.empty or 'Frame' not in df_raw.columns:
         return [], 0
@@ -151,22 +147,33 @@ def generate_timesheet(file_bytes, preset):
                 x_true = x_base_true if column == 0 else x_base_true + column_offset_x
                 y_draw_true = y_true + text_offset_y
 
-                # 位置調整
                 if timing == '●' or timing == '○':
                     x_true += circle_offset_x_true
                     y_draw_true += circle_offset_y_true
                 elif timing == '×':
-                    x_true += cross_offset_x_true  # 数字基準から少し左寄せ
+                    x_true += cross_offset_x_true
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x_true += alphabet_offset_x_true
 
-                # 3文字以上は小さく
                 if len(timing) >= 3:
                     draw.text((x_true - 10 * scale_factor_w, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_small_scaled)
                 else:
                     draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font_large_scaled)
 
-        # 黒バー
+        # book列の縦書き挿入
+        for _, row in df_page.iterrows():
+            book = str(row.get('_book', '')).strip()
+            if book:
+                frame_num = int(row['Frame'])
+                frame_in_column_total = (frame_num - 1) % frames_per_page
+                column = frame_in_column_total // 72
+                frame_in_column = frame_in_column_total % 72
+                y_true = first_frame_top_y_true + frame_in_column * frame_height_true
+                x_A = cell_x_positions_true['A'] if column == 0 else cell_x_positions_true['A'] + column_offset_x
+                x_B = cell_x_positions_true['B'] if column == 0 else cell_x_positions_true['B'] + column_offset_x
+                x_center = (x_A + x_B) / 2
+                draw_vertical_text(draw, x_center, y_true, book, font_book, spacing=font_size_true * 1.2 * scale_factor_h)
+
         if last_frame_in_page:
             frame_in_column_total = (last_frame_in_page - 1) % frames_per_page
             column = frame_in_column_total // 72
@@ -183,8 +190,7 @@ def generate_timesheet(file_bytes, preset):
 
     return result_images, max_frame_num
 
-# UI
-st.title("ちゃいむしーと Web版 v1.9.2 ×位置微調整（数字基準より6px左）")
+st.title("ちゃいむしーと Web版 v1.9.3 ★ book縦書き対応")
 selected_preset_name = st.selectbox("会社プリセットを選択してください", list(presets.keys()))
 preset_cfg = presets[selected_preset_name]
 
@@ -224,8 +230,4 @@ if uploaded_file is not None:
 
             zip_buffer.seek(0)
             st.download_button(
-                label="📦 すべてまとめてダウンロード（ZIP）",
-                data=zip_buffer,
-                file_name="timesheets_all.zip",
-                mime="application/zip"
-            )
+                label="

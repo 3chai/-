@@ -159,53 +159,64 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small_scaled if len(timing) >= 3 else font_large_scaled
                 draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font)
 
-        # book描画
+# 先頭あたりのフォント用意の近くで追加（小さめのラベル用）
+label_font = ImageFont.truetype(font_path, size=int(font_size_true * 0.9 * scale_factor_h))
+
+# …中略…
+
+        # ===== book描画（縦線＋水平ラベル） =====
         for _, row in df_page.iterrows():
             frame_num = int(row['Frame'])
             frame_in_column_total = (frame_num - 1) % frames_per_page
-            column = frame_in_column_total // 72
+            column = frame_in_column_total // 72       # 左=0 / 右=1
             frame_in_column = frame_in_column_total % 72
             y_true = first_frame_top_y_true + frame_in_column * frame_height_true
+            x_col_offset = column_offset_x if column == 1 else 0
 
             for book_col, position in book_positions.items():
-                book_val = str(row[book_col]) if book_col in row and row[book_col] else ""
-                if book_val.strip() == "":
+                # この行にその book が存在するか（空ならスキップ）
+                if book_col not in row or str(row[book_col]).strip() == "":
                     continue
 
-                if position.startswith("between"):
-                    _, left, right = position.split("_")
-                    x1 = cell_x_positions_true[left]
-                    x2 = cell_x_positions_true[right]
-                    x = (x1 + x2) / 2
-                elif position.startswith("before"):
-                    _, target = position.split("_")
-                    x = cell_x_positions_true[target] - 20
-                elif position.startswith("after"):
-                    _, target = position.split("_")
-                    x = cell_x_positions_true[target] + 20
-                else:
+                # ラベルは列名から（_book1 → book1）
+                label = book_col.replace("_", "")
+
+                # 位置→x座標の決定
+                x_insert = None
+                if position.startswith("before_"):
+                    target = position.replace("before_", "")
+                    if target in cell_x_positions_true:
+                        x_insert = cell_x_positions_true[target] - 10 * scale_factor_w
+                elif position.startswith("between_"):
+                    parts = position.split("_")
+                    if len(parts) == 3:
+                        _, left, right = parts
+                        if left in cell_x_positions_true and right in cell_x_positions_true:
+                            x_insert = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
+                elif position.startswith("after_"):
+                    target = position.replace("after_", "")
+                    if target in cell_x_positions_true:
+                        x_insert = cell_x_positions_true[target] + 10 * scale_factor_w
+
+                if x_insert is None:
                     continue
-                if column == 1:
-                    x += column_offset_x
 
-                draw_vertical_text(draw, book_val, x, y_true, font_small_scaled)
+                x_insert += x_col_offset
 
-        if last_frame_in_page:
-            frame_in_column_total = (last_frame_in_page - 1) % frames_per_page
-            column = frame_in_column_total // 72
-            frame_in_column = frame_in_column_total % 72
-            bar_y = first_frame_top_y_true + (frame_in_column + 1) * frame_height_true
-            bar_x = 0 if column == 0 else column_offset_x
-            draw.rectangle(
-                [(bar_x + 5 + bar_shift_x, bar_y),
-                 (bar_x + 5 + bar_shift_x + bar_width, bar_y + frame_height_true * 2)],
-                fill=(0, 0, 0, 128)
-            )
+                # 縦線の描画（1コマ分ちょい長め）
+                line_top = y_true - 4 * scale_factor_h
+                line_bottom = y_true + frame_height_true + 2 * scale_factor_h
+                line_w = max(1, int(2 * scale_factor_w))
+                draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
-        result_images.append(img)
-
-    return result_images, max_frame_num
-
+                # ラベルを縦線の上に水平配置（中央寄せ）
+                # textbboxで横幅を測って中央合わせ
+                bbox = draw.textbbox((0, 0), label, font=label_font)
+                label_w = bbox[2] - bbox[0]
+                label_h = bbox[3] - bbox[1]
+                label_x = x_insert - label_w / 2
+                label_y = line_top - label_h - 2 * scale_factor_h  # 線の上に少し余白
+                draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
 # UI
 st.title("ちゃいむしーと Web版 v1.9.3：book縦書き対応")
 selected_preset_name = st.selectbox("会社プリセットを選択してください", list(presets.keys()))

@@ -11,7 +11,7 @@ presets = {
     "Andraft": {
         "first_frame_top_y_true": 1278.67,
         "frame_height_true": 49.5,
-        "cell_x_positions_true": {cell: 110 + 54.5 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 110 + 54.8 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1690,
         "true_width": 3508,
         "true_height": 4961,
@@ -21,7 +21,7 @@ presets = {
     "動画工房": {
         "first_frame_top_y_true": 468,
         "frame_height_true": 27.25,
-        "cell_x_positions_true": {cell: 51.7 + 28.5 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 51.7 + 28.6 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 870,
         "true_width": 1754,
         "true_height": 2480,

@@ -301,7 +301,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                             _, left, right = parts
                             if left in cell_x_positions_true and right in cell_x_positions_true:
                                 mid = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
-                                book_x  = cell_x_positions_true[tgt] + 0.8 * (koma_width) - 3 * scale_w
+                                book_x = cell_x_positions_true[left] + 0.8 * koma_width - 3 * scale_w
+                                # もし「左から0.8コマ」派なら↓
+                                # book_x = cell_x_positions_true[left] + 0.8 * koma_width - 3 * scale_w
                     elif pos.startswith("after_"):
                         tgt = pos.replace("after_","")
                         if tgt in cell_x_positions_true:

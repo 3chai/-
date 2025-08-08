@@ -37,8 +37,12 @@ BASE_BAR_WIDTH = 1620
 BASE_BAR_SHIFT_X = 88
 text_offset_y = 4
 
-# 旧デフォ（bookラインの基準として使用）
+# bookラインの旧デフォ（線の下端算出に使用）
 BASE_BOOK_OFFSET_KOMA = 3
+
+# ヘッダ（セル名）固定オフセット（px基準）— プリセットに合わせてスケールされる
+HEADER_X_NUDGE_PX = 10   # 右に10px
+HEADER_Y_NUDGE_PX = -80  # 上に80px（マイナスで上）
 
 # フォント
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
@@ -134,7 +138,7 @@ def draw_vertical_centered(draw, text, center_x, center_y, font, spacing=0):
         y += h + spacing
 
 # =============== 本体 ===============
-def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, cell_labels=None, header_x_nudge_px=0, header_y_nudge_px=0):
+def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, cell_labels=None):
     # プリセット
     true_width = preset["true_width"]
     true_height = preset["true_height"]
@@ -154,7 +158,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     bar_width = BASE_BAR_WIDTH * scale_w
     bar_shift_x = BASE_BAR_SHIFT_X * scale_w
 
-    # 1コマ幅推定
+    # 1コマ幅推定（必要になったら使う）
     try:
         koma_width = cell_x_positions_true['B'] - cell_x_positions_true['A']
     except Exception:
@@ -191,7 +195,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     total_pages = math.ceil(max_frame / frames_per_page)
     result_images = []
 
-    # セル名の辞書（Noneや空文字は描画しない）
+    # セル名の辞書（空文字は描画しない）
     cell_labels = cell_labels or {}
 
     for page in range(total_pages):
@@ -206,27 +210,25 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
         last_frame_in_page = df_page['Frame'].max()
 
-        # ---- 列見出し（セル名）を左右両カラムの上に《縦書き》で描画（固定：数字開始の2コマ上） ----
-        HEADER_Y_NUDGE = header_y_nudge_px * scale_h
-        HEADER_X_NUDGE = header_x_nudge_px * scale_w  # ←ここをいじれば“もう少し右/左”に寄せられる
-        header_center_y = first_frame_top_y_true - 2 * frame_height_true + HEADER_Y_NUDGE
-        glyph_spacing = 2 * scale_h
-
-        for side in (0, 1):  # 0:左, 1:右
-            x_col = 0 if side == 0 else column_offset_x
-            for cell in valid_cells:
-                label = (cell_labels.get(cell) or "").strip()
-                if not label:
-                    continue
-                x_center = x_col + cell_x_positions_true[cell] + HEADER_X_NUDGE
-                draw_vertical_centered(
-                    draw,
-                    label,
-                    center_x=x_center,
-                    center_y=header_center_y,
-                    font=cell_label_font,
-                    spacing=glyph_spacing
-                )
+        # ---- セル名ヘッダ（1ページ目だけ・縦書き）----
+        if page == 0:
+            header_center_y = first_frame_top_y_true - 2 * frame_height_true + (HEADER_Y_NUDGE_PX * scale_h)
+            glyph_spacing = 2 * scale_h
+            for side in (0, 1):  # 0:左, 1:右
+                x_col = 0 if side == 0 else column_offset_x
+                for cell in valid_cells:
+                    label = (cell_labels.get(cell) or "").strip()
+                    if not label:
+                        continue
+                    x_center = x_col + cell_x_positions_true[cell] + (HEADER_X_NUDGE_PX * scale_w)
+                    draw_vertical_centered(
+                        draw,
+                        label,
+                        center_x=x_center,
+                        center_y=header_center_y,
+                        font=cell_label_font,
+                        spacing=glyph_spacing
+                    )
 
         # ---- 通常セル ----
         for cell in valid_cells:
@@ -251,7 +253,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 font = font_small if len(timing)>=3 else font_large
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
 
-        # ---- book マーカー（高さ=book_offset_koma・重なり回避あり）----
+        # ---- book マーカー（重なり回避あり）----
         if show_books:
             for _, row in df_page.iterrows():
                 frame = int(row['Frame'])
@@ -262,15 +264,13 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 row_y_base = first_frame_top_y_true + row_pos*frame_height_true
                 col_x_offset = column_offset_x if col_block==1 else 0
 
-                # この行でbook値が入っている列を位置ごとに
                 present = {}
                 for book_col, pos in book_positions.items():
                     cname = norm_str(book_col)
                     if (cname in row.index) and is_filled(row[cname]):
                         present.setdefault(pos, []).append(cname)
 
-                # 行内での当たり判定用ボックス
-                placed_boxes = []  # [(x1,y1,x2,y2), ...]
+                placed_boxes = []  # 行内の当たり判定
 
                 for pos, books_here in present.items():
                     # X座標（Aの前／間／後）
@@ -280,10 +280,12 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         if tgt in cell_x_positions_true:
                             book_x = cell_x_positions_true[tgt] - 10*scale_w
                     elif pos.startswith("between_"):
-                        _, left, right = pos.split("_")
-                        if left in cell_x_positions_true and right in cell_x_positions_true:
-                            mid = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
-                            book_x = mid - 3 * scale_w  # ほんの少し左に寄せ
+                        parts = pos.split("_")
+                        if len(parts) == 3:
+                            _, left, right = parts
+                            if left in cell_x_positions_true and right in cell_x_positions_true:
+                                mid = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
+                                book_x = mid - 3 * scale_w  # 少し左へ
                     elif pos.startswith("after_"):
                         tgt = pos.replace("after_","")
                         if tgt in cell_x_positions_true:
@@ -308,14 +310,13 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
                     line_gap = 2*scale_h
                     margin   = 12*scale_w
-                    bottom_label_bottom = None  # この位置グループの最下段ラベルの底
+                    bottom_label_bottom = None
 
                     def overlap(a,b):
                         ax1,ay1,ax2,ay2 = a
                         bx1,by1,bx2,by2 = b
                         return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
-                    # ラベルを上から順に置き、当たる限りさらに上へ
                     for idx_item, (_, label) in enumerate(items):
                         bbox = draw.textbbox((0, 0), label, font=label_font)
                         lw = bbox[2] - bbox[0]
@@ -325,10 +326,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         lx_center = book_x - (lw/2)
                         ly = base_y
 
-                        # 左右端クランプ（線は動かさない）
                         lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                        # 行内の他ラベルと被ったらさらに上へ
                         cur = (lx, ly, lx+lw, ly+lh)
                         while any(overlap(cur, box) for box in placed_boxes):
                             ly -= (lh + line_gap)
@@ -340,18 +339,15 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         if (bottom_label_bottom is None) or (ly + lh > bottom_label_bottom):
                             bottom_label_bottom = ly + lh
 
-                    # ラベル直下から線を引く（上端）
+                    # ラベル直下から線（上端）— 最下段ラベルに追従
                     pad_top = 2 * scale_h
                     line_top = bottom_label_bottom + pad_top if bottom_label_bottom is not None else base_line_top
-
-                    # 下端はページ基準に少し余裕（必要なら book_offset_koma に応じて延長）
+                    # 下端は book_offset_koma に応じて延長
                     extra_len_by_koma = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
                     line_bottom = max(line_top + 1, base_line_bottom + extra_len_by_koma)
-
                     line_w = max(1, int(2*scale_w))
                     draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0,0,0,255), width=line_w)
 
-        
         # ---- 黒バー ----
         if last_frame_in_page:
             idx_last = (last_frame_in_page - 1) % frames_per_page
@@ -370,30 +366,24 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v2.5.0｜セル名 縦書きヘッダ（数字開始の2コマ上・横位置微調整つき）")
+st.title("ちゃいむしーと Web版 v2.6.0｜ヘッダ固定（1ページ目のみ）+ book重なり回避")
 
-c1, c2, c3 = st.columns(3)
+c1, c2 = st.columns(2)
 with c1:
     selected_preset = st.selectbox("会社プリセット", list(presets.keys()))
 with c2:
     show_books = st.checkbox("Bookマーカーを描画する", value=True)
-with c3:
-    book_offset_koma = st.slider("Bookの高さ（何コマ上）", min_value=0, max_value=12, value=6, step=1)
 
-with st.expander("セル名（A〜H）入力と位置微調整", expanded=True):
+book_offset_koma = st.slider("Bookの高さ（何コマ上）", min_value=0, max_value=12, value=6, step=1)
+
+# セル名（縦書き）の入力だけ残す（1ページ目に描画）
+with st.expander("セル名（A〜H）を入力（縦書き・1ページ目のみ）", expanded=True):
     default_labels = {c: "" for c in CELLS_ALL}
     cols = st.columns(4)
     cell_labels = {}
     for i, cell in enumerate(CELLS_ALL):
         with cols[i % 4]:
-            cell_labels[cell] = st.text_input(f"{cell} セルのラベル（縦書き）", value=default_labels[cell], key=f"label_{cell}")
-
-    st.markdown("**ヘッダの位置微調整（px）**")
-    c4, c5 = st.columns(2)
-    with c4:
-        header_x_nudge_px = st.number_input("横（+で右 / ーで左）", value=10, step=1)  # ←デフォ5px右
-    with c5:
-        header_y_nudge_px = st.number_input("縦（+で下 / ーで上）", value=-80, step=1)
+            cell_labels[cell] = st.text_input(f"{cell} セルのラベル", value=default_labels[cell], key=f"label_{cell}")
 
 preset_cfg = presets[selected_preset]
 uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["csv"])
@@ -405,9 +395,7 @@ if uploaded_file is not None:
             preset_cfg,
             show_books=show_books,
             book_offset_koma=book_offset_koma,
-            cell_labels=cell_labels,
-            header_x_nudge_px=header_x_nudge_px,
-            header_y_nudge_px=header_y_nudge_px
+            cell_labels=cell_labels
         )
         if not pages:
             st.warning("有効なFrameデータが見つかりませんでした。")

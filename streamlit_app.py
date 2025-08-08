@@ -198,74 +198,74 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small if len(timing) >= 3 else font_large
                 draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-# ---- bookマーカー描画（縦線＋番号ラベル／複数は「book2-book3」結合） ----
-for _, row in df_page.iterrows():
-    frame = int(row['Frame'])
-    idx = (frame - 1) % frames_per_page
-    col_block = idx // 72
-    row_pos = idx % 72
+        # ---- bookマーカー描画（縦線＋番号ラベル／複数は「book2-book3」結合） ----
+        for _, row in df_page.iterrows():
+            frame = int(row['Frame'])
+            idx = (frame - 1) % frames_per_page
+            col_block = idx // 72
+            row_pos = idx % 72
+        
+            # 行の基準位置
+            y_base = first_frame_top_y_true + row_pos * frame_height_true
+            x_col  = column_offset_x if col_block == 1 else 0
+        
+            # ❶ この行でbook値が入っているものだけ抽出して位置ごとにグループ化
+            present = {}  # ← これが無いと NameError
+            for book_col, pos in book_positions.items():
+                if book_col in row and str(row[book_col]).strip() != "":
+                   present.setdefault(pos, []).append(book_col)
+        
+            # ❷ 位置ごとに描画
+            for pos, books_here in present.items():
+                # 基準x座標算出
+                x_insert = None
+                if pos.startswith("before_"):
+                    target = pos.replace("before_", "")
+                    if target in cell_x_positions_true:
+                        x_insert = cell_x_positions_true[target] - 10 * scale_w
+                elif pos.startswith("between_"):
+                    parts = pos.split("_")
+                    if len(parts) == 3:
+                        _, left, right = parts
+                        if left in cell_x_positions_true and right in cell_x_positions_true:
+                            x_insert = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
+                elif pos.startswith("after_"):
+                    target = pos.replace("after_", "")
+                    if target in cell_x_positions_true:
+                        x_insert = cell_x_positions_true[target] + 10 * scale_w
+                if x_insert is None:
+                    continue
 
-    # 行の基準位置
-    y_base = first_frame_top_y_true + row_pos * frame_height_true
-    x_col  = column_offset_x if col_block == 1 else 0
+                # 左に5px、上に「1文字分」
+                x_insert = x_insert + x_col - 5
+                y_ref = y_base - label_font.size
 
-    # ❶ この行でbook値が入っているものだけ抽出して位置ごとにグループ化
-    present = {}  # ← これが無いと NameError
-    for book_col, pos in book_positions.items():
-        if book_col in row and str(row[book_col]).strip() != "":
-            present.setdefault(pos, []).append(book_col)
+                # 縦線は常に1本（+1コマ長く）
+                line_top = y_ref - 4 * scale_h
+                line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
+                line_w = max(1, int(2 * scale_w))
+                draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
-    # ❷ 位置ごとに描画
-    for pos, books_here in present.items():
-        # 基準x座標算出
-        x_insert = None
-        if pos.startswith("before_"):
-            target = pos.replace("before_", "")
-            if target in cell_x_positions_true:
-                x_insert = cell_x_positions_true[target] - 10 * scale_w
-        elif pos.startswith("between_"):
-            parts = pos.split("_")
-            if len(parts) == 3:
-                _, left, right = parts
-                if left in cell_x_positions_true and right in cell_x_positions_true:
-                    x_insert = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
-        elif pos.startswith("after_"):
-            target = pos.replace("after_", "")
-            if target in cell_x_positions_true:
-                x_insert = cell_x_positions_true[target] + 10 * scale_w
-        if x_insert is None:
-            continue
+                # ラベル：単独 or 複数は「book2-book3」形式
+                if len(books_here) == 1:
+                    label = books_here[0].replace("_", "")         # "_book2" → "book2"
+                else:
+                    nums = []
+                    for b in books_here:
+                        s = b.replace("_", "")                     # "book2"
+                        m = re.search(r'(\d+)$', s)
+                        n = int(m.group(1)) if m else 0
+                        nums.append((n, s))
+                    nums.sort(key=lambda t: t[0])                  # 昇順。降順なら reverse=True
+                    label = "-".join(s for _, s in nums)
 
-        # 左に5px、上に「1文字分」
-        x_insert = x_insert + x_col - 5
-        y_ref = y_base - label_font.size
-
-        # 縦線は常に1本（+1コマ長く）
-        line_top = y_ref - 4 * scale_h
-        line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
-        line_w = max(1, int(2 * scale_w))
-        draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
-
-        # ラベル：単独 or 複数は「book2-book3」形式
-        if len(books_here) == 1:
-            label = books_here[0].replace("_", "")         # "_book2" → "book2"
-        else:
-            nums = []
-            for b in books_here:
-                s = b.replace("_", "")                     # "book2"
-                m = re.search(r'(\d+)$', s)
-                n = int(m.group(1)) if m else 0
-                nums.append((n, s))
-            nums.sort(key=lambda t: t[0])                  # 昇順。降順なら reverse=True
-            label = "-".join(s for _, s in nums)
-
-        # ラベルを縦線の上に中央配置
-        bbox = draw.textbbox((0, 0), label, font=label_font)
-        label_w = bbox[2] - bbox[0]
-        label_h = bbox[3] - bbox[1]
-        label_x = x_insert - (label_w / 2)
-        label_y = line_top - label_h - 2 * scale_h
-        draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
+                # ラベルを縦線の上に中央配置
+                bbox = draw.textbbox((0, 0), label, font=label_font)
+                label_w = bbox[2] - bbox[0]
+                label_h = bbox[3] - bbox[1]
+                label_x = x_insert - (label_w / 2)
+                label_y = line_top - label_h - 2 * scale_h
+                draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
 
         # ---- 黒バー（ページ末尾） ----
         if last_frame_in_page:
@@ -282,7 +282,7 @@ for _, row in df_page.iterrows():
 
         result_images.append(img)
 
-    　　　return result_images, max_frame
+return result_images, max_frame
 
 # =============== Streamlit UI ===============
 st.title("ちゃいむしーと Web版 v1.9.4｜bookマーカー（縦線＋水平ラベル）対応")

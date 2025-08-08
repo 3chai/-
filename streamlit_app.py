@@ -15,8 +15,8 @@ presets = {
         "column_offset_x": 1690,
         "true_width": 3508,
         "true_height": 4961,
-        "default_book_koma": 6,
-        "default_celllabel_koma": 2,
+        "default_book_koma": 5,
+        "default_celllabel_koma": 1,
     },
     "動画工房": {
         "first_frame_top_y_true": 468,

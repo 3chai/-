@@ -49,7 +49,7 @@ HEADER_BOTTOM_NUDGE_PX = -80  # 下端基準から上に80px（負で上）
 
 # ○/●/〇 の共通縮小・位置補正（ここ調整でOK）
 CIRCLE_SCALE   = 0.5   # 大きさ（1.0=等倍）
-CIRCLE_NUDGE_X = 10      # 横補正 px（正=右, 負=左）
+CIRCLE_NUDGE_X = 8      # 横補正 px（正=右, 負=左）
 CIRCLE_NUDGE_Y = 10      # 縦補正 px（正=下, 負=上）
 
 # フォント
@@ -152,18 +152,18 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
     if pos.startswith("before_"):
         tgt = pos.replace("before_", "")
         if tgt in cell_x_positions_true:
-            book_x = cell_x_positions_true[left] + 0 * koma_width - 5 * scale_w
+            book_x = cell_x_positions_true[tgt] - 9 * scale_w
     elif pos.startswith("between_"):
         parts = pos.split("_")
         if len(parts) == 3:
             _, left, right = parts
             if left in cell_x_positions_true and right in cell_x_positions_true:
                 # 全間で統一：左セル中心 + 0.8コマ + 3px相当
-                book_x = cell_x_positions_true[left] + 0.9 * koma_width - 5 * scale_w
+                book_x = cell_x_positions_true[left] + 0.8 * koma_width + 3 * scale_w
     elif pos.startswith("after_"):
         tgt = pos.replace("after_", "")
         if tgt in cell_x_positions_true:
-            book_x = cell_x_positions_true[tgt] + 0.9 * koma_width - 5 * scale_w
+            book_x = cell_x_positions_true[tgt] + 0.8 * koma_width + 3 * scale_w
     return book_x
 
 # =============== 本体 ===============

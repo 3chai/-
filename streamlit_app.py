@@ -224,6 +224,8 @@ def generate_timesheet(file_bytes, preset):
                 col = norm_str(book_col)  # 列名正規化（'_book1' でも 'book1' でもOK）
                 if (col in row.index) and is_filled(row[col]):
                     present.setdefault(pos, []).append(col)
+            # --- この行のbookを位置ごとに描画する前に追加 ---
+            placed_boxes = []  # このフレーム行で既に置いたラベルの当たり判定用
 
             # 位置ごとに描画
             for pos, books_here in present.items():
@@ -269,20 +271,40 @@ def generate_timesheet(file_bytes, preset):
                     nums.sort(key=lambda t: t[0])                              # 昇順
                     label = "-".join(s for _, s in nums)
 
-                # ラベルを縦線の上に描画（縦線は動かさない／ラベルだけ端でクランプ）
-                bbox = draw.textbbox((0, 0), label, font=label_font)
-                label_w = bbox[2] - bbox[0]
-                label_h = bbox[3] - bbox[1]
+             # ---- ラベルを縦線の上に描画（縦線は動かさない） ----
+             bbox = draw.textbbox((0, 0), label, font=label_font)
+             label_w = bbox[2] - bbox[0]
+             label_h = bbox[3] - bbox[1]
 
-                label_x_center = x_insert - (label_w / 2)
-                label_y = line_top - label_h - 2 * scale_h
+             # 中央基準
+             label_x_center = x_insert - (label_w / 2)
+             label_y = line_top - label_h - 2 * scale_h
 
-                margin = 12 * scale_w
-                min_x = margin
-                max_x = true_width - margin - label_w
-                label_x = max(min_x, min(max_x, label_x_center))
+             # 端で切れないように「ラベルだけ」クランプ
+             margin = 12 * scale_w
+             min_x = margin
+             max_x = true_width - margin - label_w
+             label_x = max(min_x, min(max_x, label_x_center))
 
-                draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
+             # ========= 重なり回避（上にずらす） =========
+             gap_stack = 2 * scale_h                      # ずらし時の余白
+             def overlap(a, b):
+                 ax1, ay1, ax2, ay2 = a
+                 bx1, by1, bx2, by2 = b
+                 return not (ax2 <= bx1 or bx2 <= ax1 or ay2 <= by1 or by2 <= ay1)
+
+             # いま置こうとしているラベルの箱
+             cur = (label_x, label_y, label_x + label_w, label_y + label_h)
+
+             # 既存とぶつかるあいだは上に一段ずつ上げる
+             while any(overlap(cur, box) for box in placed_boxes):
+                 label_y -= (label_h + gap_stack)
+                 cur = (label_x, label_y, label_x + label_w, label_y + label_h)
+
+             # 描画して、この行の配置済みとして登録
+             draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
+             placed_boxes.append(cur)
+             # ============================================
                 
         # ---- 黒バー（ページ末尾） ----
         if last_frame_in_page:

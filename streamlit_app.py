@@ -282,7 +282,7 @@ def generate_timesheet(file_bytes, preset):
 
         result_images.append(img)
 
-return result_images, max_frame
+        return result_images, max_frame
 
 # =============== Streamlit UI ===============
 st.title("ちゃいむしーと Web版 v1.9.4｜bookマーカー（縦線＋水平ラベル）対応")

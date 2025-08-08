@@ -401,7 +401,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v3.1.1｜book枠＆重なり回避（行内共有）＋セル名縦書き")
+st.title("ちゃいむしーと Web版 v3.1.1")
 
 # プリセット選択
 selected_preset = st.selectbox("会社プリセット", list(presets.keys()))
@@ -413,14 +413,14 @@ default_celllabel_koma = preset_cfg.get("default_celllabel_koma", 2)
 
 c1, c2, c3 = st.columns(3)
 with c1:
-    show_books = st.checkbox("Bookマーカーを描画する", value=True)
+    show_books = st.checkbox("BOOKも書き出す", value=True)
 with c2:
-    book_offset_koma = st.slider("Bookの高さ（何コマ上）", 0, 12, int(default_book_koma), 1)
+    book_offset_koma = st.slider("BOOKの高さ（何コマ上）", 0, 12, int(default_book_koma), 1)
 with c3:
     celllabel_koma = st.slider("セル名の高さ（何コマ上）", 0, 6, int(default_celllabel_koma), 1)
 
 # セル名入力（1ページ目・縦書き）
-with st.expander("セル名（A〜H）を入力（縦書き・1ページ目のみ / 日本語OK）", expanded=True):
+with st.expander("セル名（A〜H）を入力", expanded=True):
     default_labels = {c: "" for c in CELLS_ALL}
     cols = st.columns(4)
     cell_labels = {}

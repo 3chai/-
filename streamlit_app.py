@@ -334,7 +334,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         items.append((n, s))
                     items.sort(key=lambda t: t[0])
 
-                    line_gap = 3*scale_h
+                    line_gap = 4*scale_h
                     margin   = 12*scale_w
                     bottom_label_bottom = None
 

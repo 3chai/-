@@ -235,7 +235,7 @@ def generate_timesheet(file_bytes, preset):
                     continue
 
                 # 列ブロックと指定オフセット反映：左に5px、上に3コマ
-                x_insert = x_insert + x_col - 5
+                x_insert = x_insert + x_col - 5 * scale_w
                 y_ref = y_base - (frame_height_true * 3)
 
                 if len(books_here) == 1:
@@ -261,7 +261,7 @@ def generate_timesheet(file_bytes, preset):
                         bbox = draw.textbbox((0, 0), label, font=label_font)
                         label_x = xi - (bbox[2] - bbox[0]) / 2
                         # 線がないので、単独時の線上端に相当する位置を基準に少し上へ
-                        label_y = (y_ref - 4 * scale_h) - (bbox[3] - bbox[1]) - 2 * scale_h
+                        label_y = (y_ref - 20 * scale_h) - (bbox[3] - bbox[1]) - 2 * scale_h
                         draw.text((label_x, label_y), label, fill=(0,0,0,255), font=label_font)
                         
         # ---- 黒バー（ページ末尾） ----

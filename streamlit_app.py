@@ -139,7 +139,7 @@ def generate_timesheet(file_bytes, preset):
 
     # 「between_*」の押し出し：左セル中心 + koma_width * SHIFT + px微調整
     MID_SHIFT_DEFAULT = 0       # 0.5コマ右へ
-    MID_FINE_DEFAULT  = 20 * scale_w  # px微調整（共通）
+    MID_FINE_DEFAULT  = 50 * scale_w  # px微調整（共通）
     MID_SHIFT_OVERRIDES = {}      # ← 特別補正は今は無し
     MID_FINE_OVERRIDES  = {}
 

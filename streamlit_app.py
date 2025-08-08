@@ -254,7 +254,7 @@ def generate_timesheet(file_bytes, preset):
                     m = re.search(r"(\d+)$", s)
                     n = int(m.group(1)) if m else 0
                     items.append((n, s))
-                items.sort(key=lambda t: t[0])
+                items.sort(key=lambda t: t[0], reverse=True)  # 数字が大きいほど上に来る: book4, book3, …)
 
                 line_gap = 2 * scale_h
                 min_label_y = None

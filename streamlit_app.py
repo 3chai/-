@@ -198,9 +198,26 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small if len(timing) >= 3 else font_large
                 draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-        # ---- bookマーカー描画（縦線＋番号ラベル／複数は「book2-book3」結合） ----
+        # ---- bookマーカー描画（縦線＋番号ラベル／複数は「book2-book3」結合）[3コマ上げ版] ----
+        for _, row in df_page.iterrows():
+            frame = int(row['Frame'])
+            idx = (frame - 1) % frames_per_page
+            col_block = idx // 72
+            row_pos = idx % 72
+
+            # 行の基準位置（このフレームの行の上端）
+            y_base = first_frame_top_y_true + row_pos * frame_height_true
+            x_col  = column_offset_x if col_block == 1 else 0
+
+            # この行でbook値が入っているものだけ抽出し、位置ごとにグループ化
+            present = {}
+            for book_col, pos in book_positions.items():
+                if book_col in row and str(row[book_col]).strip() != "":
+                    present.setdefault(pos, []).append(book_col)
+
+            # 位置ごとに描画
             for pos, books_here in present.items():
-                # 基準x座標（pos → x_insert）
+                # 基準x座標の計算
                 x_insert = None
                 if pos.startswith("before_"):
                     target = pos.replace("before_", "")
@@ -219,28 +236,27 @@ def generate_timesheet(file_bytes, preset):
                 if x_insert is None:
                     continue
 
-                # 列ブロック／手動オフセット：左に5px、上に「1文字分」
+                # 左に5px、上に3コマ分ずらす
                 x_insert = x_insert + x_col - 5
-                y_ref = y_base - label_font.size  # 1文字分上
+                y_ref = y_base - (frame_height_true * 3)
 
-                # 縦線は常に1本（+1コマ長く）
+                # 縦線（+1コマ長く）
                 line_top = y_ref - 4 * scale_h
                 line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
                 line_w = max(1, int(2 * scale_w))
                 draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
+                # ラベル：単独 or 複数は「book2-book3」形式（番号は昇順）
                 if len(books_here) == 1:
-                    # 単独：番号あり（_book2 → book2）
                     label = books_here[0].replace("_", "")
                 else:
-                    # 複数：番号抽出して昇順で結合（例：book2-book3）
                     nums = []
                     for b in books_here:
-                        s = b.replace("_", "")   # "book2"
+                        s = b.replace("_", "")        # "book2"
                         m = re.search(r'(\d+)$', s)
                         n = int(m.group(1)) if m else 0
                         nums.append((n, s))
-                    nums.sort(key=lambda t: t[0])  # 昇順。降順なら reverse=True
+                    nums.sort(key=lambda t: t[0])     # 昇順。降順にしたいなら reverse=True
                     label = "-".join(s for _, s in nums)
 
                 # ラベルを縦線の上に中央配置

@@ -294,7 +294,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     if pos.startswith("before_"):
                         tgt = pos.replace("before_","")
                         if tgt in cell_x_positions_true:
-                            book_x = cell_x_positions_true[tgt] - 10*scale_w
+                            book_x = cell_x_positions_true[tgt] - 12*scale_w
                     elif pos.startswith("between_"):
                         parts = pos.split("_")
                         if len(parts) == 3:

@@ -11,7 +11,7 @@ presets = {
     "Andraft": {
         "first_frame_top_y_true": 1278.67,
         "frame_height_true": 49.5,
-        "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 110 + 54.5 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1690,
         "true_width": 3508,
         "true_height": 4961,

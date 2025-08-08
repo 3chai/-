@@ -159,18 +159,18 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
     if pos.startswith("before_"):
         tgt = pos.replace("before_", "")
         if tgt in cell_x_positions_true:
-            book_x = cell_x_positions_true[tgt] - 12 * scale_w
+            book_x = cell_x_positions_true[tgt] - 13.5 * scale_w
     elif pos.startswith("between_"):
         parts = pos.split("_")
         if len(parts) == 3:
             _, left, right = parts
             if left in cell_x_positions_true and right in cell_x_positions_true:
                 # 全間で統一：左セル中心 + 0.8コマ - 3px
-                book_x = cell_x_positions_true[left] + 0.8 * koma_width - 3 * scale_w
+                book_x = cell_x_positions_true[left] + 0.8 * koma_width 0 * scale_w
     elif pos.startswith("after_"):
         tgt = pos.replace("after_", "")
         if tgt in cell_x_positions_true:
-            book_x = cell_x_positions_true[tgt] + 0.8 * koma_width - 3 * scale_w
+            book_x = cell_x_positions_true[tgt] + 0.8 * koma_width 0 * scale_w
     return book_x
 
 # =============== 本体 ===============
@@ -209,9 +209,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
     label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))  # book
     try:
-        cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.9 * scale_h))
+        cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.7 * scale_h))
     except Exception:
-        cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
+        cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.7 * scale_h))
 
     # CSV
     df = read_csv_flexibly(file_bytes)

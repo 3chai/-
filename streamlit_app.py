@@ -325,7 +325,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
                     # 調整（控えめ設定）
                     line_gap    = 2*scale_h       # 基本の縦間隔
-                    extra_shift = 1.5*scale_h       # 衝突時の追加上げ量
+                    extra_shift = 3*scale_h       # 衝突時の追加上げ量
                     margin      = 12*scale_w
 
                     bottom_label_bottom = None

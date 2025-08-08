@@ -128,26 +128,37 @@ def is_filled(v):
     s = norm_str(v)
     return s not in ("", "nan", "None")
 
-# === 縦書き描画（セル名用・下揃え） ===
-def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
+# === 縦書き描画（セル名用・下揃え＋枠） ===
+def draw_vertical_bottom_with_box(draw, text, bottom_x, bottom_y, font, spacing=0,
+                                  pad_x=2, pad_y=2, outline_width=1):
     """
-    text を縦書きで、(bottom_x, bottom_y) を“縦列の下端”にして描画。
-    spacing は各文字間のpx。
+    text を縦書きで (bottom_x, bottom_y) を“縦列の下端”にして描画。
+    文字列全体を囲う枠（塗りなし）も描く。pad_x/pad_y は文字列外側の余白(px)。
     """
     if not text:
         return
     text = normalize_for_vertical(text)
     boxes = []
     total_h = 0
+    max_w = 0
     for ch in text:
         bbox = draw.textbbox((0, 0), ch, font=font)
         w = bbox[2] - bbox[0]
         h = bbox[3] - bbox[1]
         boxes.append((ch, w, h))
         total_h += h
+        max_w = max(max_w, w)
     total_h += spacing * (len(boxes) - 1 if boxes else 0)
 
-    # 下端から上へ積み上げ
+    # 枠（下揃え基準）：中心x=bottom_x、下端y=bottom_y
+    rect_left   = bottom_x - max_w/2 - pad_x
+    rect_top    = bottom_y - total_h - pad_y
+    rect_right  = bottom_x + max_w/2 + pad_x
+    rect_bottom = bottom_y + pad_y
+    draw.rectangle([rect_left, rect_top, rect_right, rect_bottom],
+                   outline=(0,0,0,255), width=int(max(1, outline_width)))
+
+    # テキスト本体（下端から上へ）
     y = bottom_y - total_h
     for ch, w, h in boxes:
         draw.text((bottom_x - w / 2.0, y), ch, fill=(0, 0, 0, 255), font=font)
@@ -165,7 +176,7 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
         if len(parts) == 3:
             _, left, right = parts
             if left in cell_x_positions_true and right in cell_x_positions_true:
-                # 全間で統一：左セル中心 + 0.8コマ - 3px
+                # 全間で統一：左セル中心 + 0.8コマ + 1px(スケール)
                 book_x = cell_x_positions_true[left] + 0.8 * koma_width + 1 * scale_w
     elif pos.startswith("after_"):
         tgt = pos.replace("after_", "")
@@ -213,6 +224,11 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     except Exception:
         cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))
 
+    # ボックス余白＆線幅（スケール連動）
+    BOX_PAD_X = 4 * scale_w
+    BOX_PAD_Y = 2 * scale_h
+    BOX_OUTLINE_W = max(1, int(1 * scale_w))
+
     # CSV
     df = read_csv_flexibly(file_bytes)
     if df.empty or 'Frame' not in df.columns:
@@ -248,7 +264,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
         last_frame_in_page = df_page['Frame'].max()
 
-        # ---- セル名ヘッダ（1ページ目だけ・縦書き・左カラムのみ・下揃え）----
+        # ---- セル名ヘッダ（1ページ目だけ・縦書き・左カラムのみ・下揃え＋枠）----
         if page == 0:
             header_bottom_y = (first_frame_top_y_true
                                - celllabel_koma * frame_height_true
@@ -260,13 +276,16 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 if not label:
                     continue
                 x_center = x_col + cell_x_positions_true[cell] + (HEADER_X_NUDGE_PX * scale_w)
-                draw_vertical_bottom(
+                draw_vertical_bottom_with_box(
                     draw,
                     label,
                     bottom_x=x_center,
                     bottom_y=header_bottom_y,
                     font=cell_label_font,
-                    spacing=glyph_spacing
+                    spacing=glyph_spacing,
+                    pad_x=BOX_PAD_X,
+                    pad_y=BOX_PAD_Y,
+                    outline_width=BOX_OUTLINE_W
                 )
 
         # ---- 通常セル ----
@@ -310,7 +329,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     if (cname in row.index) and is_filled(row[cname]):
                         present.setdefault(pos, []).append(cname)
 
-                # ---- 行内で共有する当たり判定リスト（←ここがポイント！）----
+                # 行内で共有する当たり判定リスト（ボックス込み）
                 placed_boxes_row = []
 
                 # 位置→xを先に出して、x順に処理（安定）
@@ -335,7 +354,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     items.sort(key=lambda t: t[0])
 
                     line_gap = 4*scale_h
-                    extra_shift = 4*scale_h 
+                    extra_shift = 4*scale_h
                     margin   = 12*scale_w
                     bottom_label_bottom = None
 
@@ -345,24 +364,34 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
                     for idx_item, (_, label) in enumerate(items):
+                        # 文字サイズ
                         bbox = draw.textbbox((0, 0), label, font=label_font)
                         lw = bbox[2] - bbox[0]
                         lh = bbox[3] - bbox[1]
 
+                        # 基準位置（若番ほど上）
                         base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
                         lx_center = book_x - (lw/2)
                         ly = base_y
 
+                        # はみ出し防止
                         lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                        cur = (lx, ly, lx+lw, ly+lh)
-                        # ← 行内共通の placed_boxes_row で当たり判定！
-                        while any(overlap(cur, box) for box in placed_boxes_row):
+                        # 衝突判定は「枠込み」のボックスで行う
+                        cur_padded = (lx - BOX_PAD_X, ly - BOX_PAD_Y,
+                                      lx + lw + BOX_PAD_X, ly + lh + BOX_PAD_Y)
+                        while any(overlap(cur_padded, box) for box in placed_boxes_row):
                             ly -= (lh + line_gap + extra_shift)
-                            cur = (lx, ly, lx+lw, ly+lh)
+                            cur_padded = (lx - BOX_PAD_X, ly - BOX_PAD_Y,
+                                          lx + lw + BOX_PAD_X, ly + lh + BOX_PAD_Y)
 
+                        # ラベル本体
                         draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
-                        placed_boxes_row.append(cur)
+                        # 枠（塗りなし）
+                        draw.rectangle([cur_padded[0], cur_padded[1], cur_padded[2], cur_padded[3]],
+                                       outline=(0,0,0,255), width=BOX_OUTLINE_W)
+
+                        placed_boxes_row.append(cur_padded)
 
                         if (bottom_label_bottom is None) or (ly + lh > bottom_label_bottom):
                             bottom_label_bottom = ly + lh
@@ -395,7 +424,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v3.0.0｜book重なり回避（行内共有）＋セル名縦書き")
+st.title("ちゃいむしーと Web版 v3.1.0｜セル名＆bookラベルに枠（縦・下揃え）")
 
 # プリセット選択
 selected_preset = st.selectbox("会社プリセット", list(presets.keys()))

@@ -235,11 +235,6 @@ def generate_timesheet(file_bytes, preset):
                         x_insert = cell_x_positions_true[target] + 10 * scale_w
                 if x_insert is None:
                     continue
-                                    # ← 左へ5px
-                x_insert = x_insert + x_col - 5　* scale_w
-
-                # ↑ 上へ3コマ（frame_height_true * 3）
-                y_ref = y_base - (frame_height_true * 3)
                
                 # 位置→x座標決定
                 x_insert = None
@@ -264,8 +259,8 @@ def generate_timesheet(file_bytes, preset):
                 # ← 左へ5px
                 x_insert = x_insert + x_col - 5　* scale_w
 
-                # ↑ 上へ3コマ（frame_height_true * 4）
-                y_ref = y_base - (frame_height_true * 4)
+                # ↑ 上へ3コマ（frame_height_true * 3）
+                y_ref = y_base - (frame_height_true * 3)
 
                 # 縦線の長さ：元より +1コマ
                 line_top = y_ref - 4 * scale_h

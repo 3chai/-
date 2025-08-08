@@ -198,23 +198,6 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small if len(timing) >= 3 else font_large
                 draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-        # ---- bookマーカー描画（縦線＋水平ラベル／複数対応） ----
-        for _, row in df_page.iterrows():
-            frame = int(row['Frame'])
-            idx = (frame - 1) % frames_per_page
-            col_block = idx // 72
-            row_pos = idx % 72
-
-            # 行の基準位置（このフレームの行の上端）
-            y_base = first_frame_top_y_true + row_pos * frame_height_true
-            x_col  = column_offset_x if col_block == 1 else 0
-
-            # この行でbook値が入っているものだけ抽出し、位置ごとにグルーピング
-            present = {}
-            for book_col, pos in book_positions.items():
-                if book_col in row and str(row[book_col]).strip() != "":
-                    present.setdefault(pos, []).append(book_col)
-
             for pos, books_here in present.items():
                 # 基準x座標（pos → x_insert）
                 x_insert = None
@@ -237,30 +220,39 @@ def generate_timesheet(file_bytes, preset):
 
                 # 列ブロック／手動オフセット：左に5px、上に「1文字分」
                 x_insert = x_insert + x_col - 5
-                y_ref = y_base - label_font.size  # ← ここが「1文字分上」
+                y_ref = y_base - label_font.size  # ← 1文字分上
 
-                # 同位置のbookが複数なら左右に等間隔で並べる
-                n = len(books_here)
-                step = 12 * scale_w  # 横間隔(px)
-                start_offset = -step * (n - 1) / 2
+                # ===== 縦線は1本だけ描く（+1コマ長く） =====
+                line_top = y_ref - 4 * scale_h
+                line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
+                line_w = max(1, int(2 * scale_w))
+                draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
-                for i, bcol in enumerate(books_here):
-                    xi = x_insert + (start_offset + step * i)
+                # ===== ラベルは“縦積み”で配置 =====
+                # 表示ラベル（番号あり）
+                labels = [bcol.replace("_", "") for bcol in books_here]
 
-                    # 縦線（+1コマ長く）
-                    line_top = y_ref - 4 * scale_h
-                    line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
-                    line_w = max(1, int(2 * scale_w))
-                    draw.line([(xi, line_top), (xi, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
+                # 例のとおり「book3」「book2」みたいに数字降順で並べる
+                def num_suffix(s):
+                    m = re.search(r'(\d+)$', s)
+                    return int(m.group(1)) if m else -1
+                labels.sort(key=num_suffix, reverse=True)
 
-                    # ラベル（番号あり）
-                    label = bcol.replace("_", "")  # 例: "_book2" → "book2"
-                    bbox = draw.textbbox((0, 0), label, font=label_font)
-                    label_w = bbox[2] - bbox[0]
-                    label_h = bbox[3] - bbox[1]
-                    label_x = xi - (label_w / 2)
-                    label_y = line_top - label_h - 2 * scale_h  # 線の上に少し余白
-                    draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
+                # 各ラベルのサイズ計測
+                bboxes = [draw.textbbox((0, 0), lb, font=label_font) for lb in labels]
+                widths = [(bx[2] - bx[0]) for bx in bboxes]
+                heights = [(bx[3] - bx[1]) for bx in bboxes]
+
+                gap = 2 * scale_h  # ラベル間の縦間隔
+                total_h = sum(heights) + gap * (len(labels) - 1)
+
+                # 縦線の上端から、全体が収まるように上から順に配置
+                top_y = line_top - total_h - 2 * scale_h  # ちょい上に余白
+
+                for lb, w, h in zip(labels, widths, heights):
+                    label_x = x_insert - (w / 2)  # 縦線中心に水平センター
+                    draw.text((label_x, top_y), lb, fill=(0, 0, 0, 255), font=label_font)
+                    top_y += h + gap
                         
         # ---- 黒バー（ページ末尾） ----
         if last_frame_in_page:

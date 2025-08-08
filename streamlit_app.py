@@ -148,9 +148,9 @@ def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
 
 # book X座標（before/between/after）— すべてコマ割合で
 def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
-    BETWEEN_FRAC = 0.80   # left から 0.80 コマ右
+    BETWEEN_FRAC = 0.79   # left から 0.80 コマ右
     AFTER_FRAC   = 0.80   # tgt から 0.80 コマ右
-    BEFORE_FRAC  = 0.10   # tgt から 0.20 コマ左（←ここ触れば効く）
+    BEFORE_FRAC  = 0.20   # tgt から 0.20 コマ左（←ここ触れば効く）
     FINE_FRAC    = 0.00   # 微調整: コマの何割か（例 0.02）
 
     book_x = None

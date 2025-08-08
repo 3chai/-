@@ -48,7 +48,7 @@ HEADER_X_NUDGE_PX      = 10   # 右に10px（負で左）
 HEADER_BOTTOM_NUDGE_PX = -80  # 下端基準から上に80px（負で上）
 
 # ○/●の共通縮小・位置補正（必要に応じて調整）
-CIRCLE_SCALE   = 0.2   # 0.7〜0.9で微調整
+CIRCLE_SCALE   = 0.5   # 0.7〜0.9で微調整
 CIRCLE_NUDGE_Y = 0     # 縦位置の微調整px（正=下, 負=上）※スケール後に適用
 
 # フォント

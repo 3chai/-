@@ -3,7 +3,7 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import math, re, io, os, unicodedata, zipfile
 
-# ========= UI コンパクト設定 =========
+# ========= ページ設定（タイトル欠け防止でCSSは控えめ） =========
 st.set_page_config(
     layout="wide",
     page_title="ちゃいむしーと",
@@ -12,12 +12,8 @@ st.set_page_config(
 )
 st.markdown("""
 <style>
-.block-container {padding-top:0.5rem; padding-bottom:1rem;}
-h1,h2,h3 {margin:0.2rem 0;}
-section[data-testid="stSidebar"] .stSlider label,
-section[data-testid="stSidebar"] .stTextInput label,
-section[data-testid="stSidebar"] .stCheckbox label {font-size:0.9rem;}
-section[data-testid="stSidebar"] .stSlider > div > div {padding-top:0.2rem; padding-bottom:0.2rem;}
+/* 余白は少しだけ詰める。見切れ防止のためh系はデフォルトサイズのまま */
+.block-container {padding-top:0.8rem; padding-bottom:1rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -418,11 +414,10 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
     return result_images, max_frame
 
-# ========= UI（本体） =========
-st.markdown("### ちゃいむしーと Web版 v3.2.0｜UIスリム化＋縮小プレビュー")
 
+# ========= UI（サイドバー＝設定だけ／メイン＝タイトル・操作・プレビュー） =========
 with st.sidebar:
-    st.markdown("#### 設定")
+    st.subheader("設定")
     selected_preset = st.selectbox("会社プリセット", list(presets.keys()))
     preset_cfg = presets[selected_preset]
 
@@ -434,20 +429,28 @@ with st.sidebar:
     celllabel_koma = st.slider("セル名の高さ（何コマ上）", 0, 6, int(default_celllabel_koma), 1)
 
     st.markdown("---")
-    st.markdown("#### セル名（1ページ目のみ）")
+    st.caption("セル名（1ページ目のみ）")
     default_labels = {c: "" for c in CELLS_ALL}
     cell_labels = {}
     for cell in CELLS_ALL:
         cell_labels[cell] = st.text_input(f"{cell}", value=default_labels[cell], key=f"label_{cell}")
 
-    st.markdown("---")
-    st.markdown("#### プレビュー")
-    preview_scale = st.slider("プレビュー倍率（%）", 20, 120, 35, 5)
-    show_all_pages = st.checkbox("全ページをプレビュー表示する（重い）", value=False)
+# メインコンテンツ
+st.title("ちゃいむしーと Web版 v3.2.1")
+st.caption("UIスリム化：設定はサイドバー、プレビューはメインで大きく表示")
 
+# 操作（アップロード／生成／プレビュー設定）
+colA, colB, colC = st.columns([2,1,1])
+with colA:
     uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["csv"])
-    run = st.button("タイムシート生成！")
+with colB:
+    preview_scale = st.slider("プレビュー倍率（%）", 20, 150, 45, 5)
+with colC:
+    show_all_pages = st.checkbox("全ページを表示", value=False)
 
+run = st.button("タイムシート生成！", type="primary", use_container_width=True)
+
+# プレビュー＆DL
 if uploaded_file is not None and run:
     pages, total_frames = generate_timesheet(
         uploaded_file.read(),
@@ -467,14 +470,17 @@ if uploaded_file is not None and run:
         true_w = preset_cfg["true_width"]
         preview_w = max(200, int(true_w * preview_scale / 100))
 
+        st.markdown("---")
+        st.subheader("プレビュー")
         if show_all_pages:
             cols = st.columns(2)
             for i, page in enumerate(pages):
                 with cols[i % 2]:
-                    st.image(page, use_container_width=False, width=preview_w)
+                    st.image(page, use_container_width=False, width=preview_w, caption=f"Page {i+1}")
         else:
-            st.image(pages[0], use_container_width=False, width=preview_w)
+            st.image(pages[0], use_container_width=False, width=preview_w, caption="Page 1")
 
+        st.markdown("---")
         # ZIP ダウンロード
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:

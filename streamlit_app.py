@@ -198,23 +198,25 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small if len(timing) >= 3 else font_large
                 draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-        # ---- bookマーカー描画（縦線＋水平"book"ラベル） ----
+        # ---- bookマーカー描画（縦線＋水平"book"ラベル）: 同位置の複数bookを左右にずらす ----
         for _, row in df_page.iterrows():
             frame = int(row['Frame'])
             idx = (frame - 1) % frames_per_page
             col_block = idx // 72
             row_pos = idx % 72
 
-            # 基準位置（そのフレームの行の上端）
             y_base = first_frame_top_y_true + row_pos * frame_height_true
             x_col  = column_offset_x if col_block == 1 else 0
 
+            # この行に存在するbookだけを位置ごとにグルーピング
+            present = {}
             for book_col, pos in book_positions.items():
-                # この行でbook列に値が入っているときだけ描画
-                if book_col not in row or str(row[book_col]).strip() == "":
-                    continue
+                if book_col in row and str(row[book_col]).strip() != "":
+                    present.setdefault(pos, []).append(book_col)
 
-                # 位置→x座標決定
+            # 位置ごとに描画（同じposのときは左右にずらす）
+            for pos, books_here in present.items():
+                # 基準x座標の計算
                 x_insert = None
                 if pos.startswith("before_"):
                     target = pos.replace("before_", "")
@@ -230,32 +232,38 @@ def generate_timesheet(file_bytes, preset):
                     target = pos.replace("after_", "")
                     if target in cell_x_positions_true:
                         x_insert = cell_x_positions_true[target] + 10 * scale_w
-
                 if x_insert is None:
                     continue
 
-                # ← 左へ5px
-                x_insert = x_insert + x_col - 5 * scale_w
-
-                # ↑ 上へ3コマ（frame_height_true * 3）
+                # 列ブロック・手動オフセット反映（左に5px、上に3コマ）
+                x_insert = x_insert + x_col - 5
                 y_ref = y_base - (frame_height_true * 3)
 
-                # 縦線の長さ：元より +1コマ
-                line_top = y_ref - 4 * scale_h
-                line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h  # 1コマ分長く
+                # 同位置のbookが複数ある場合は水平に並べる（重なり回避）
+                n = len(books_here)
+                step = 12 * scale_w  # 本数間の横オフセット（px）
+                start_offset = -step * (n - 1) / 2  # 中央基準に左右へ
 
-                line_w = max(1, int(2 * scale_w))
-                draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
+                for i, bcol in enumerate(books_here):
+                    xi = x_insert + (start_offset + step * i)
 
-                # ラベル（中央揃え、線の少し上）
-                label = "book"  # 必要なら row[book_col] から "book1" 等にしてもOK
-                bbox = draw.textbbox((0, 0), label, font=label_font)
-                label_w = bbox[2] - bbox[0]
-                label_h = bbox[3] - bbox[1]
-                label_x = x_insert - (label_w / 2)
-                label_y = line_top - label_h - 2 * scale_h
-                draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
+                    # 縦線（+1コマ長く）
+                    line_top = y_ref - 4 * scale_h
+                    line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
+                    line_w = max(1, int(2 * scale_w))
+                    draw.line([(xi, line_top), (xi, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
+                    # ラベル文字：固定なら "book"、番号出すなら下行を bcol から生成
+                    label = bcol.replace("_", "")  # ←番号も出したい場合はこちらに変更
+
+                    bbox = draw.textbbox((0, 0), label, font=label_font)
+                    label_w = bbox[2] - bbox[0]
+                    label_h = bbox[3] - bbox[1]
+                    label_x = xi - (label_w / 2)
+                    label_y = line_top - label_h - 2 * scale_h
+                    draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
+
+        
         # ---- 黒バー（ページ末尾） ----
         if last_frame_in_page:
             idx_last = (last_frame_in_page - 1) % frames_per_page

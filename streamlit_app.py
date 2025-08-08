@@ -400,7 +400,33 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
     return result_images, max_frame
 
-# =============== UI ===============
+
+# =============== UI（CSSでサイズ調整） ===============
+st.markdown("""
+    <style>
+    /* タイトルを小さく＆はみ出し防止 */
+    .stApp h1 {
+        font-size: 1.35rem !important;
+        line-height: 1.3 !important;
+        margin-bottom: 0.4rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* テキスト入力系をコンパクトに（セル名用） */
+    input[type="text"] {
+        font-size: 0.8rem !important;
+        height: 1.8rem !important;
+        padding: 0 6px !important;
+    }
+    /* セクション見出しもちょい小さく */
+    .stMarkdown h3, .stMarkdown h2 {
+        font-size: 1rem !important;
+        margin: 0.4rem 0 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("ちゃいむしーと Web版 v3.1.1｜book枠＆重なり回避（行内共有）＋セル名縦書き")
 
 # プリセット選択

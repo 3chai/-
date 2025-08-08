@@ -30,7 +30,7 @@ presets = {
         "default_book_koma": 5,
         "default_celllabel_koma": 0,
         # ← 追加：少しだけ右へ（必要に応じて 0.02〜0.04 で調整）
-        "book_fine_frac": 0.03,
+        "book_fine_frac": 0.00,
     }
 }
 

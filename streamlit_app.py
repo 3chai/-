@@ -209,15 +209,12 @@ def generate_timesheet(file_bytes, preset):
             y_base = first_frame_top_y_true + row_pos * frame_height_true
             x_col  = column_offset_x if col_block == 1 else 0
         
-            # ❶ この行でbook値が入っているものだけ抽出して位置ごとにグループ化
-            present = {}  # ← これが無いと NameError
+            present = {}
             for book_col, pos in book_positions.items():
                 if book_col in row and str(row[book_col]).strip() != "":
-                   present.setdefault(pos, []).append(book_col)
+                    present.setdefault(pos, []).append(book_col)
         
-            # ❷ 位置ごとに描画
             for pos, books_here in present.items():
-                # 基準x座標算出
                 x_insert = None
                 if pos.startswith("before_"):
                     target = pos.replace("before_", "")
@@ -236,30 +233,26 @@ def generate_timesheet(file_bytes, preset):
                 if x_insert is None:
                     continue
 
-                # 左に5px、上に「1文字分」
                 x_insert = x_insert + x_col - 5
                 y_ref = y_base - label_font.size
 
-                # 縦線は常に1本（+1コマ長く）
                 line_top = y_ref - 4 * scale_h
                 line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
                 line_w = max(1, int(2 * scale_w))
                 draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
-                # ラベル：単独 or 複数は「book2-book3」形式
                 if len(books_here) == 1:
-                    label = books_here[0].replace("_", "")         # "_book2" → "book2"
+                    label = books_here[0].replace("_", "")
                 else:
                     nums = []
                     for b in books_here:
-                        s = b.replace("_", "")                     # "book2"
+                        s = b.replace("_", "")
                         m = re.search(r'(\d+)$', s)
                         n = int(m.group(1)) if m else 0
                         nums.append((n, s))
-                    nums.sort(key=lambda t: t[0])                  # 昇順。降順なら reverse=True
+                    nums.sort(key=lambda t: t[0])
                     label = "-".join(s for _, s in nums)
 
-                # ラベルを縦線の上に中央配置
                 bbox = draw.textbbox((0, 0), label, font=label_font)
                 label_w = bbox[2] - bbox[0]
                 label_h = bbox[3] - bbox[1]
@@ -282,7 +275,7 @@ def generate_timesheet(file_bytes, preset):
 
         result_images.append(img)
 
-return result_images, max_frame
+    return result_images, max_frame
 
 # =============== Streamlit UI ===============
 st.title("ちゃいむしーと Web版 v1.9.4｜bookマーカー（縦線＋水平ラベル）対応")

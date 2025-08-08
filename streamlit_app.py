@@ -27,8 +27,8 @@ presets = {
         "true_width": 1754,
         "true_height": 2480,
         # デフォルト（要望どおり）
-        "default_book_koma": 4,
-        "default_celllabel_koma": 1,
+        "default_book_koma": 5,
+        "default_celllabel_koma": 0,
     }
 }
 

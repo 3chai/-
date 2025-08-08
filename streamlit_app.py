@@ -108,6 +108,7 @@ def get_book_positions(df, valid_cells):
     return positions
 
 def norm_str(s: object) -> str:
+    # 全角→半角、全角スペース→半角、前後スペース除去
     return unicodedata.normalize("NFKC", str(s)).replace("\u3000", " ").strip()
 
 def is_filled(v: object) -> bool:
@@ -135,10 +136,24 @@ def generate_timesheet(file_bytes, preset):
     bar_width = BASE_BAR_WIDTH * scale_w
     bar_shift_x = BASE_BAR_SHIFT_X * scale_w
 
+    # 1コマ幅（AとBの差）を推定
+    try:
+        koma_width = cell_x_positions_true['B'] - cell_x_positions_true['A']
+    except Exception:
+        xs = [cell_x_positions_true[c] for c in sorted(cell_x_positions_true.keys())]
+        diffs = [xs[i+1] - xs[i] for i in range(len(xs) - 1)]
+        koma_width = sum(diffs) / len(diffs) if diffs else 0
+
+    # 「〜の間」の微調整（必要なら使ってね）
+    MID_SHIFT_DEFAULT = 0.0            # 0.0=ど真ん中（以前ズレが出るなら 0.5 等）
+    MID_FINE_DEFAULT  = 0.0            # 追加px調整
+    MID_SHIFT_OVERRIDES = {}           # 例: {("B","C"):0.35, ("C","D"):0.35}
+    MID_FINE_OVERRIDES  = {}           # 例: {("B","C"):-4*scale_w, ("C","D"):-4*scale_w}
+
     # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
-    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))  # bookラベル少し小さめ
+    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))  # book少し小さめ
 
     # CSV
     df = read_csv_flexibly(file_bytes)
@@ -201,28 +216,29 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small if len(timing) >= 3 else font_large
                 draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-        # ---- bookマーカー描画（縦線＋水平ラベル） ── 3コマ上／ラベル下で縦線停止 ----
+        # ---- bookマーカー描画（縦線は“最下段のラベルの下端＋余白”から） ----
         for _, row in df_page.iterrows():
             frame = int(row['Frame'])
             idx = (frame - 1) % frames_per_page
-            col_block = idx // 72
+            col_block = idx // 72                 # 0=左, 1=右
             row_pos = idx % 72
 
-            # 行の基準位置
+            # 行の基準位置（このフレームの行）
             row_y_base = first_frame_top_y_true + row_pos * frame_height_true
             col_x_offset = column_offset_x if col_block == 1 else 0
 
             # この行でbook値が入っているものだけ抽出（位置ごと）
             present = {}
             for book_col, pos in book_positions.items():
-                cname = norm_str(book_col)
+                cname = norm_str(book_col)  # "_book2" でも "book2" でもOK
                 if (cname in row.index) and is_filled(row[cname]):
                     present.setdefault(pos, []).append(cname)
 
-            placed_boxes = []  # 同一行でのラベル重なり回避
+            # 既に置いたラベルの当たり判定（この行だけ）
+            placed_boxes = []
 
             for pos, books_here in present.items():
-                # 基準xの決定
+                # 座標計算（before / between / after）
                 book_x = None
                 if pos.startswith("before_"):
                     tgt = pos.replace("before_", "")
@@ -233,7 +249,10 @@ def generate_timesheet(file_bytes, preset):
                     if len(parts) == 3:
                         _, left, right = parts
                         if left in cell_x_positions_true and right in cell_x_positions_true:
-                            book_x = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
+                            mid = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
+                            shift_koma = MID_SHIFT_OVERRIDES.get((left, right), MID_SHIFT_DEFAULT)
+                            fine_px    = MID_FINE_OVERRIDES.get((left, right), MID_FINE_DEFAULT)
+                            book_x = mid + shift_koma * koma_width + fine_px
                 elif pos.startswith("after_"):
                     tgt = pos.replace("after_", "")
                     if tgt in cell_x_positions_true:
@@ -241,46 +260,47 @@ def generate_timesheet(file_bytes, preset):
                 if book_x is None:
                     continue
 
-                # カラム補正＆微左寄せ
+                # ページ右カラムならオフセット、さらに左に5px
                 book_x = book_x + col_x_offset - 5
-
-                # 3コマ分上の基準
+                # 3コマ分上に配置する基準
                 y_ref = row_y_base - (frame_height_true * 3)
 
-                # 縦線の基本長
+                # ベースの縦線範囲（後で上側を調整）
                 base_line_top    = y_ref - 4 * scale_h
                 base_line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
 
-                # 若い番号→上に来るよう並べる
+                # 若い番号ほど上に縦並び（book1, book2, …）
                 items = []
                 for b in books_here:
                     s = norm_str(b).replace("_", "")   # "book2"
                     m = re.search(r"(\d+)$", s)
                     n = int(m.group(1)) if m else 0
                     items.append((n, s))
-                items.sort(key=lambda t: t[0])  # book1, book2, …
+                items.sort(key=lambda t: t[0])
 
                 line_gap = 2 * scale_h
                 margin   = 12 * scale_w
 
-                # 「最上段ラベルの下端」記録用
-                top_label_bottom = None
+                # この位置で一番“下”に来たラベルの下端（= 最大値）
+                lowest_label_bottom = None
 
-                # ラベルを上から順に配置
+                # ラベルを上から順に置く
                 for idx_item, (_, label) in enumerate(items):
                     bbox = draw.textbbox((0, 0), label, font=label_font)
                     lw = bbox[2] - bbox[0]
                     lh = bbox[3] - bbox[1]
 
+                    # book1が最上段、その下にbook2…
                     base_y = (base_line_top - lh - 2 * scale_h) - idx_item * (lh + line_gap)
 
+                    # 縦線中心で水平センター
                     lx_center = book_x - (lw / 2)
                     ly = base_y
 
                     # 左右端クランプ（縦線は動かさない）
                     lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                    # 同一行の別位置ラベルと当たったらさらに上へ
+                    # 別位置ラベルと当たったらさらに上へ
                     def overlap(a, b):
                         ax1, ay1, ax2, ay2 = a
                         bx1, by1, bx2, by2 = b
@@ -291,19 +311,19 @@ def generate_timesheet(file_bytes, preset):
                         ly -= (lh + line_gap)
                         cur = (lx, ly, lx + lw, ly + lh)
 
-                    # 描画
+                    # ラベル描画＆登録
                     draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
                     placed_boxes.append(cur)
 
-                    # 最上段の下端を記録（いちばん上に来たラベルの y+高さ）
-                    if top_label_bottom is None or ly + lh < top_label_bottom:
-                        top_label_bottom = ly + lh
+                    # 最下段の下端を更新（最大値）
+                    if (lowest_label_bottom is None) or (ly + lh > lowest_label_bottom):
+                        lowest_label_bottom = ly + lh
 
-                # ラベル描画後、縦線を“ラベルの下まで”に制限して描画
-                pad = 2 * scale_h  # 余白
-                line_top = base_line_top
-                if top_label_bottom is not None:
-                    line_top = max(base_line_top, top_label_bottom + pad)
+                # ---- ラベルを置いた“後”で縦線を描画（ラベルの下から始める）----
+                pad = 2 * scale_h  # ラベル直下の余白
+                line_top    = base_line_top
+                if lowest_label_bottom is not None:
+                    line_top = max(base_line_top, lowest_label_bottom + pad)
 
                 line_w = max(1, int(2 * scale_w))
                 draw.line([(book_x, line_top), (book_x, base_line_bottom)], fill=(0, 0, 0, 255), width=line_w)
@@ -326,7 +346,7 @@ def generate_timesheet(file_bytes, preset):
     return result_images, max_frame
 
 # =============== Streamlit UI ===============
-st.title("ちゃいむしーと Web版 v1.9.7｜bookマーカー：ラベル下で縦線停止")
+st.title("ちゃいむしーと Web版 v1.9.7｜book縦線＝最下段ラベルの下から開始")
 selected_preset = st.selectbox("会社プリセットを選択", list(presets.keys()))
 preset_cfg = presets[selected_preset]
 
@@ -346,19 +366,16 @@ if uploaded_file is not None:
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
                 for i, page in enumerate(pages):
                     st.image(page, caption=f"Page {i+1}", use_container_width=True)
-
                     b = io.BytesIO()
                     page.save(b, format='PNG')
                     b.seek(0)
                     zipf.writestr(f"timesheet_page_{i+1}.png", b.getvalue())
-
                     st.download_button(
                         label=f"⬇️ Page {i+1} ダウンロード",
                         data=b.getvalue(),
                         file_name=f"timesheet_page_{i+1}.png",
                         mime="image/png"
                     )
-
             zip_buffer.seek(0)
             st.download_button(
                 label="📦 すべてまとめてダウンロード（ZIP）",

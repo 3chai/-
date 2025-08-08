@@ -139,7 +139,7 @@ def generate_timesheet(file_bytes, preset):
     # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
-    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
+    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.7 * scale_h))
 
     # CSV
     df = read_csv_flexibly(file_bytes)

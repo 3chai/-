@@ -329,51 +329,63 @@ def generate_timesheet(
                         items.append((n, s))
                     items.sort(key=lambda t: t[0])
 
-                    # 見た目＆回避量
-                    line_gap   = 4*scale_h           # ベースの段差
-                    extra_shift= 4*scale_h           # ぶつかったとき追加で更に上げる量
-                    margin     = 12*scale_w
-                    rect_pad_x = 2*scale_w           # 枠の左右余白
-                    rect_pad_y = 2*scale_h           # 枠の上下余白
-                    rect_w     = max(1, int(1.5*scale_w))  # 枠線太さ
+                   # 見た目＆回避量（少し控えめに）
+                   line_gap    = 3*scale_h        # 以前より小さめ
+                   extra_shift = 3*scale_h        # ぶつかった時の追加上げ量
+                   margin      = 12*scale_w
 
-                    bottom_rect_bottom = None  # 一番下の枠の下端
+                   # 枠の余白（枠は飾り。判定には使わない）
+                   rect_pad_x = 2*scale_w
+                   rect_pad_y = 2*scale_h
+                   rect_w     = max(1, int(1.5*scale_w))
 
-                    def overlap(a,b):
-                        ax1,ay1,ax2,ay2 = a
-                        bx1,by1,bx2,by2 = b
-                        return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
+                   bottom_label_bottom = None
 
-                    for idx_item, (_, label) in enumerate(items):
-                        # テキストサイズ
-                        bbox = draw.textbbox((0, 0), label, font=label_font)
-                        lw = bbox[2] - bbox[0]
-                        lh = bbox[3] - bbox[1]
+                   def overlap(a,b):
+                       ax1,ay1,ax2,ay2 = a
+                       bx1,by1,bx2,by2 = b
+                       return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
-                        # 初期配置（上から順）
-                        base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
-                        lx_center = book_x - (lw/2)
-                        ly = base_y
-                        lx = max(margin, min(true_width - margin - lw, lx_center))
+                   for idx_item, (_, label) in enumerate(items):
+                       # テキストサイズ
+                       bbox = draw.textbbox((0, 0), label, font=label_font)
+                       lw = bbox[2] - bbox[0]
+                       lh = bbox[3] - bbox[1]
 
-                        # 当たり判定は「枠」の外形で行う
-                        rect = (lx - rect_pad_x, ly - rect_pad_y,
-                                lx + lw + rect_pad_x, ly + lh + rect_pad_y)
+                       # 初期配置（上から順）
+                       base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
+                       lx_center = book_x - (lw/2)
+                       ly = base_y
+                       lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                        while any(overlap(rect, box) for box in placed_boxes_row):
-                            ly -= (lh + line_gap + extra_shift)
-                            rect = (lx - rect_pad_x, ly - rect_pad_y,
-                                    lx + lw + rect_pad_x, ly + lh + rect_pad_y)
+                       # ★ 当たり判定はテキストの矩形のみで行う（枠は使わない） ←ここ変更
+                       cur_text = (lx, ly, lx+lw, ly+lh)
+                       while any(overlap(cur_text, box) for box in placed_boxes_row):
+                           ly -= (lh + line_gap + extra_shift)
+                           cur_text = (lx, ly, lx+lw, ly+lh)
 
-                        # テキスト＆枠を描画
-                        draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
-                        draw.rectangle(rect, outline=(0,0,0,255), width=rect_w)
+                       # テキスト描画
+                       draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
 
-                        placed_boxes_row.append(rect)
+                       # 枠はあとから“飾り”として描く（判定には使わない） ←ここ変更
+                       rect = (lx - rect_pad_x, ly - rect_pad_y,
+                               lx + lw + rect_pad_x, ly + lh + rect_pad_y)
+                       draw.rectangle(rect, outline=(0,0,0,255), width=rect_w)
 
-                        # 最下段の枠の「下端」を更新（線の起点に使う）
-                        if (bottom_rect_bottom is None) or (rect[3] > bottom_rect_bottom):
-                            bottom_rect_bottom = rect[3]
+                       # 行内の衝突管理はテキスト矩形で持つ ←ここ変更
+                       placed_boxes_row.append(cur_text)
+
+                       # いちばん下の“テキスト底”で更新（線の起点用） ←ここ変更
+                       if (bottom_label_bottom is None) or (ly + lh > bottom_label_bottom):
+                           bottom_label_bottom = ly + lh
+
+                   # 線はテキスト底 + 少し下 からに戻す ←ここ変更
+                   pad_top   = 2 * scale_h
+                   line_top  = (bottom_label_bottom + pad_top) if bottom_label_bottom is not None else base_line_top
+                   extra_len = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
+                   line_bottom = max(line_top + 1, base_line_bottom + extra_len)
+                   line_w = max(1, int(2*scale_w))
+                   draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0,0,0,255), width=line_w)
 
                     # ラインは「最下段の枠の少し下」から
                     pad_top = 2*scale_h

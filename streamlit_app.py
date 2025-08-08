@@ -251,9 +251,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 font = font_small if len(timing)>=3 else font_large
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
 
-        # ---- book マーカー（高さ=book_offset_koma・線は自動延長）----
+        # ---- book マーカー（高さ=book_offset_koma・重なり回避あり）----
         if show_books:
-            # シンプル版（以前と同等・Xは中央寄せのロジック）
             for _, row in df_page.iterrows():
                 frame = int(row['Frame'])
                 idx = (frame-1) % frames_per_page
@@ -263,11 +262,15 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 row_y_base = first_frame_top_y_true + row_pos*frame_height_true
                 col_x_offset = column_offset_x if col_block==1 else 0
 
+                # この行でbook値が入っている列を位置ごとに
                 present = {}
                 for book_col, pos in book_positions.items():
                     cname = norm_str(book_col)
                     if (cname in row.index) and is_filled(row[cname]):
                         present.setdefault(pos, []).append(cname)
+
+                # 行内での当たり判定用ボックス
+                placed_boxes = []  # [(x1,y1,x2,y2), ...]
 
                 for pos, books_here in present.items():
                     # X座標（Aの前／間／後）
@@ -279,9 +282,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     elif pos.startswith("between_"):
                         _, left, right = pos.split("_")
                         if left in cell_x_positions_true and right in cell_x_positions_true:
-                            # 中央寄り + 微調整
                             mid = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
-                            book_x = mid - 3 * scale_w
+                            book_x = mid - 3 * scale_w  # ほんの少し左に寄せ
                     elif pos.startswith("after_"):
                         tgt = pos.replace("after_","")
                         if tgt in cell_x_positions_true:
@@ -306,10 +308,16 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
                     line_gap = 2*scale_h
                     margin   = 12*scale_w
-                    bottom_label_bottom = None
+                    bottom_label_bottom = None  # この位置グループの最下段ラベルの底
 
+                    def overlap(a,b):
+                        ax1,ay1,ax2,ay2 = a
+                        bx1,by1,bx2,by2 = b
+                        return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
+
+                    # ラベルを上から順に置き、当たる限りさらに上へ
                     for idx_item, (_, label) in enumerate(items):
-                        bbox = draw.textbbox((0, 0), label, font=ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h)))
+                        bbox = draw.textbbox((0, 0), label, font=label_font)
                         lw = bbox[2] - bbox[0]
                         lh = bbox[3] - bbox[1]
 
@@ -317,19 +325,33 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         lx_center = book_x - (lw/2)
                         ly = base_y
 
+                        # 左右端クランプ（線は動かさない）
                         lx = max(margin, min(true_width - margin - lw, lx_center))
-                        draw.text((lx, ly), label, fill=(0,0,0,255), font=ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h)))
+
+                        # 行内の他ラベルと被ったらさらに上へ
+                        cur = (lx, ly, lx+lw, ly+lh)
+                        while any(overlap(cur, box) for box in placed_boxes):
+                            ly -= (lh + line_gap)
+                            cur = (lx, ly, lx+lw, ly+lh)
+
+                        draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
+                        placed_boxes.append(cur)
 
                         if (bottom_label_bottom is None) or (ly + lh > bottom_label_bottom):
                             bottom_label_bottom = ly + lh
 
+                    # ラベル直下から線を引く（上端）
                     pad_top = 2 * scale_h
                     line_top = bottom_label_bottom + pad_top if bottom_label_bottom is not None else base_line_top
+
+                    # 下端はページ基準に少し余裕（必要なら book_offset_koma に応じて延長）
                     extra_len_by_koma = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
                     line_bottom = max(line_top + 1, base_line_bottom + extra_len_by_koma)
+
                     line_w = max(1, int(2*scale_w))
                     draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0,0,0,255), width=line_w)
 
+        
         # ---- 黒バー ----
         if last_frame_in_page:
             idx_last = (last_frame_in_page - 1) % frames_per_page
@@ -369,9 +391,9 @@ with st.expander("セル名（A〜H）入力と位置微調整", expanded=True):
     st.markdown("**ヘッダの位置微調整（px）**")
     c4, c5 = st.columns(2)
     with c4:
-        header_x_nudge_px = st.number_input("横（+で右 / ーで左）", value=5, step=1)  # ←デフォ5px右
+        header_x_nudge_px = st.number_input("横（+で右 / ーで左）", value=10, step=1)  # ←デフォ5px右
     with c5:
-        header_y_nudge_px = st.number_input("縦（+で下 / ーで上）", value=0, step=1)
+        header_y_nudge_px = st.number_input("縦（+で下 / ーで上）", value=-80, step=1)
 
 preset_cfg = presets[selected_preset]
 uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["csv"])

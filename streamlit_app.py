@@ -11,26 +11,22 @@ presets = {
     "Andraft": {
         "first_frame_top_y_true": 1278.67,
         "frame_height_true": 49.5,
-        "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 110 + 54.5 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1690,
         "true_width": 3508,
         "true_height": 4961,
         "default_book_koma": 6,
         "default_celllabel_koma": 2,
-        # ← 追加：book の横位置 微調整（コマ幅に対する割合）
-        "book_fine_frac": 0.00,
     },
     "動画工房": {
         "first_frame_top_y_true": 468,
         "frame_height_true": 27.25,
-        "cell_x_positions_true": {cell: 51.7 + 29.2 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 51.7 + 28.5 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 870,
         "true_width": 1754,
         "true_height": 2480,
         "default_book_koma": 5,
         "default_celllabel_koma": 0,
-        # ← 追加：少しだけ右へ（必要に応じて 0.02〜0.04 で調整）
-        "book_fine_frac": 0.00,
     }
 }
 
@@ -55,6 +51,16 @@ HEADER_BOTTOM_NUDGE_PX = -80  # 下端基準から上に80px（負で上）
 CIRCLE_SCALE   = 0.5   # 大きさ（1.0=等倍）
 CIRCLE_NUDGE_X = 8     # 横補正 px（正=右, 負=左）
 CIRCLE_NUDGE_Y = 10    # 縦補正 px（正=下, 負=上）
+
+# --- BOOK位置のpx固定オフセット（プリセットに依存せず同じ見え方狙い）---
+BOOK_BEFORE_PX  = -15   # tgtセルの左へ
+BOOK_BETWEEN_PX = +20   # 左セル位置から右へ
+BOOK_AFTER_PX   = +45   # tgtセルの右へ
+# プリセット別の微調整（必要時だけ使う）
+BOOK_PRESET_FINE = {
+    # "Andraft": 0,
+    # "動画工房": 0,
+}
 
 # フォント
 font_path    = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
@@ -150,38 +156,40 @@ def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
         draw.text((bottom_x - w/2.0, y), ch, fill=(0,0,0,255), font=font)
         y += h + spacing
 
-# book X座標（before/between/after）— すべてコマ割合 + 微調整
-def calc_book_x(pos, cell_x_positions_true, koma_width, fine_frac):
-    BETWEEN_FRAC = 0.79   # left から 0.79 コマ右
-    AFTER_FRAC   = 0.80   # tgt から 0.80 コマ右
-    BEFORE_FRAC  = 0.25   # tgt から 0.25 コマ左（正確には "- BEFORE_FRAC"）
-
-    book_x = None
+# --- BOOKのX座標（px固定版） ---
+def calc_book_x(pos, cell_x_positions_true, preset_name, scale_w):
+    """
+    BOOKのX座標を“px固定”で返す。
+    - before_X:  Xセルの左に BOOK_BEFORE_PX
+    - between_L_R: Lセルの位置から BOOK_BETWEEN_PX
+    - after_X:   Xセルの右に BOOK_AFTER_PX
+    pxは見え方を揃えるため基本固定。必要なら scale_w で拡縮。
+    """
+    fine = BOOK_PRESET_FINE.get(preset_name, 0)  # プリセット別の微調整（px）
     if pos.startswith("before_"):
         tgt = pos.replace("before_", "")
         if tgt in cell_x_positions_true:
-            book_x = cell_x_positions_true[tgt] - (BEFORE_FRAC + fine_frac) * koma_width
+            return cell_x_positions_true[tgt] + (BOOK_BEFORE_PX + fine) * scale_w
     elif pos.startswith("between_"):
         parts = pos.split("_")
         if len(parts) == 3:
             _, left, right = parts
             if left in cell_x_positions_true and right in cell_x_positions_true:
-                book_x = cell_x_positions_true[left] + (BETWEEN_FRAC + fine_frac) * koma_width
+                return cell_x_positions_true[left] + (BOOK_BETWEEN_PX + fine) * scale_w
     elif pos.startswith("after_"):
         tgt = pos.replace("after_", "")
         if tgt in cell_x_positions_true:
-            book_x = cell_x_positions_true[tgt] + (AFTER_FRAC + fine_frac) * koma_width
-    return book_x
+            return cell_x_positions_true[tgt] + (BOOK_AFTER_PX + fine) * scale_w
+    return None
 
 # =============== 本体 ===============
-def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, cell_labels=None, celllabel_koma=2):
+def generate_timesheet(file_bytes, preset_name, preset_cfg, show_books=True, book_offset_koma=6, cell_labels=None, celllabel_koma=2):
     # プリセット
-    true_width = preset["true_width"]; true_height = preset["true_height"]
-    frame_height_true = preset["frame_height_true"]
-    first_frame_top_y_true = preset["first_frame_top_y_true"]
-    column_offset_x = preset["column_offset_x"]
-    cell_x_positions_true = preset["cell_x_positions_true"]
-    fine_frac = preset.get("book_fine_frac", 0.0)  # ← 追加
+    true_width = preset_cfg["true_width"]; true_height = preset_cfg["true_height"]
+    frame_height_true = preset_cfg["frame_height_true"]
+    first_frame_top_y_true = preset_cfg["first_frame_top_y_true"]
+    column_offset_x = preset_cfg["column_offset_x"]
+    cell_x_positions_true = preset_cfg["cell_x_positions_true"]
 
     # スケール
     scale_h = frame_height_true / BASE_FRAME_HEIGHT
@@ -194,7 +202,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     bar_width = BASE_BAR_WIDTH * scale_w
     bar_shift_x = BASE_BAR_SHIFT_X * scale_w
 
-    # 1コマ幅推定
+    # 1コマ幅（推定：ラベル配置には使わないが他の補正で参照することがあるので残す）
     try:
         koma_width = cell_x_positions_true['B'] - cell_x_positions_true['A']
     except Exception:
@@ -288,10 +296,10 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     y_draw += circle_offset_y + (CIRCLE_NUDGE_Y * scale_h)
                     font = font_circle
                 elif timing == '×':
-                    x += BASE_CROSS_OFFSET_X * scale_w
+                    x += cross_offset_x
                     font = font_large
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
-                    x += BASE_ALPHABET_OFFSET_X * scale_w
+                    x += alphabet_offset_x
                     font = font_large if len(timing) < 3 else font_small
                 else:
                     font = font_small if len(timing) >= 3 else font_large
@@ -300,6 +308,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
         # ---- book マーカー（行内共有の重なり回避／枠は飾り）----
         if show_books:
+            # 枠パディング＆線太さ
             BOX_PAD_X = 1 * scale_w
             BOX_PAD_Y = 1 * scale_h
             BOX_OUTLINE_W = max(1, int(1.5 * scale_w))
@@ -313,17 +322,19 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 row_y_base = first_frame_top_y_true + row_pos*frame_height_true
                 col_x_offset = column_offset_x if col_block==1 else 0
 
+                # その行でbook値が入っている列を位置ごとに集約
                 present = {}
                 for book_col, pos in book_positions.items():
                     cname = norm_str(book_col)
                     if (cname in row.index) and is_filled(row[cname]):
                         present.setdefault(pos, []).append(cname)
 
-                placed_boxes_row = []
+                placed_boxes_row = []  # 行内で共有（パディング込み矩形）
 
+                # 位置→xを先に出して、x順に処理（安定）
                 entries = []
                 for pos, books_here in present.items():
-                    bx = calc_book_x(pos, cell_x_positions_true, koma_width, fine_frac)  # ← ここで渡す
+                    bx = calc_book_x(pos, cell_x_positions_true, preset_name, scale_w)
                     if bx is not None:
                         entries.append((bx + col_x_offset - 5, pos, books_here))
 
@@ -332,6 +343,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     base_line_top    = y_ref - 4*scale_h
                     base_line_bottom = y_ref + (frame_height_true*2) + 2*scale_h
 
+                    # 若い番号→上
                     items = []
                     for b in books_here:
                         s = norm_str(b).replace("_","")
@@ -340,8 +352,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         items.append((n, s))
                     items.sort(key=lambda t: t[0])
 
-                    line_gap    = 2*scale_h
-                    extra_shift = 3*scale_h
+                    # 調整
+                    line_gap    = 2*scale_h       # 基本の縦間隔
+                    extra_shift = 3*scale_h       # 衝突時の追加上げ量
                     margin      = 12*scale_w
 
                     bottom_label_bottom = None
@@ -352,15 +365,18 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
                     for idx_item, (_, label) in enumerate(items):
+                        # 基準の理論サイズ
                         bbox0 = draw.textbbox((0, 0), label, font=label_font)
                         lw = bbox0[2] - bbox0[0]
                         lh = bbox0[3] - bbox0[1]
 
+                        # 基準位置（若番ほど上）
                         base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
                         lx_center = book_x - (lw / 2)
                         ly = base_y
                         lx = max(margin, min(true_width - margin - lw, lx_center))
 
+                        # 実座標で bbox を取り直して衝突回避（枠パディング込み）
                         while True:
                             bbox_at = draw.textbbox((lx, ly), label, font=label_font)
                             cur_padded = (
@@ -374,14 +390,22 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                                 break
                             ly -= (lh + line_gap + extra_shift)
 
+                        # テキスト描画
                         draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
+                        # 枠（塗りなし）
                         draw.rectangle([cur_padded[0], cur_padded[1], cur_padded[2], cur_padded[3]],
                                        outline=(0,0,0,255), width=BOX_OUTLINE_W)
+
+                        # 当たり判定に追加（枠サイズ）
                         placed_boxes_row.append(cur_padded)
+
+                        # 線の起点（最下段の底）
                         bottom_label_bottom = max(bottom_label_bottom or cur_padded[3], cur_padded[3])
 
+                    # ラベル直下から線（最下段ラベルに追従）
                     pad_top = 2 * scale_h
                     line_top = (bottom_label_bottom + pad_top) if bottom_label_bottom is not None else base_line_top
+                    # 下端は “高さスライダー”に応じて延長
                     extra_len = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
                     line_bottom = max(line_top + 1, base_line_bottom + extra_len)
                     line_w = max(1, int(2*scale_w))
@@ -406,7 +430,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v3.3.0｜○/●縮小＋BOOK横位置プリセット微調整")
+st.title("ちゃいむしーと Web版 v3.3.0｜BOOK横位置px固定＆○/●縮小")
 
 # プリセット選択
 selected_preset = st.selectbox("会社プリセット", list(presets.keys()))
@@ -439,6 +463,7 @@ if uploaded_file is not None:
     if st.button("タイムシート生成！"):
         pages, total_frames = generate_timesheet(
             uploaded_file.read(),
+            selected_preset,          # ← プリセット名を渡す（px微調整用）
             preset_cfg,
             show_books=show_books,
             book_offset_koma=book_offset_koma,

@@ -210,26 +210,20 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
         last_frame_in_page = df_page['Frame'].max()
 
-        # ---- セル名ヘッダ（1ページ目だけ・縦書き）----
+        # ---- セル名ヘッダ（1ページ目だけ・縦書き／左カラムのみ）----
         if page == 0:
             header_center_y = first_frame_top_y_true - 2 * frame_height_true + (HEADER_Y_NUDGE_PX * scale_h)
             glyph_spacing = 2 * scale_h
-            for side in (0, 1):  # 0:左, 1:右
-                x_col = 0 if side == 0 else column_offset_x
-                for cell in valid_cells:
-                    label = (cell_labels.get(cell) or "").strip()
-                    if not label:
-                        continue
-                    x_center = x_col + cell_x_positions_true[cell] + (HEADER_X_NUDGE_PX * scale_w)
-                    draw_vertical_centered(
-                        draw,
-                        label,
-                        center_x=x_center,
-                        center_y=header_center_y,
-                        font=cell_label_font,
-                        spacing=glyph_spacing
-                    )
-
+            x_col = 0  # 左カラムのみ
+            for cell in valid_cells:
+                label = (cell_labels.get(cell) or "").strip()
+                if not label:
+                    continue
+                x_center = x_col + cell_x_positions_true[cell] + (HEADER_X_NUDGE_PX * scale_w)
+                draw_vertical_centered(
+                    draw, label, center_x=x_center, center_y=header_center_y,
+                    font=cell_label_font, spacing=glyph_spacing
+                )
         # ---- 通常セル ----
         for cell in valid_cells:
             x_base = cell_x_positions_true[cell]

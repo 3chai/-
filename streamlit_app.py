@@ -235,10 +235,38 @@ def generate_timesheet(file_bytes, preset):
                         x_insert = cell_x_positions_true[target] + 10 * scale_w
                 if x_insert is None:
                     continue
+                                    # 位置→x座標決定
+                x_insert = None
+                if pos.startswith("before_"):
+                    target = pos.replace("before_", "")
+                    if target in cell_x_positions_true:
+                        x_insert = cell_x_positions_true[target] - 10 * scale_w
+                elif pos.startswith("between_"):
+                    parts = pos.split("_")
+                    if len(parts) == 3:
+                        _, left, right = parts
+                        if left in cell_x_positions_true and right in cell_x_positions_true:
+                            x_insert = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
+                elif pos.startswith("after_"):
+                    target = pos.replace("after_", "")
+                    if target in cell_x_positions_true:
+                        x_insert = cell_x_positions_true[target] + 10 * scale_w
 
-                # 左に5px、上に「1文字分」
+                if x_insert is None:
+                    continue
+
+                # ← 左へ5px
                 x_insert = x_insert + x_col - 5
-                y_ref = y_base - label_font.size
+
+                # ↑ 上へ3コマ（frame_height_true * 3）
+                y_ref = y_base - (frame_height_true * 3)
+
+                # 縦線の長さ：元より +1コマ
+                line_top = y_ref - 4 * scale_h
+                line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h  # 1コマ分長く
+
+                line_w = max(1, int(2 * scale_w))
+                draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
                 # 縦線は常に1本（+1コマ長く）
                 line_top = y_ref - 4 * scale_h

@@ -3,10 +3,11 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import math, re, io, os, unicodedata, zipfile
 
-# 列オフセット
+# =============== 基本定義 ===============
 cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
+CELLS_ALL = list(cell_offsets.keys())
 
-# プリセット辞書
+# プリセット（画像解像度／座標）
 presets = {
     "Andraft": {
         "first_frame_top_y_true": 1278.67,
@@ -26,7 +27,7 @@ presets = {
     }
 }
 
-# 基準値
+# スケール基準値
 BASE_FRAME_HEIGHT = 49.5
 BASE_WIDTH = 3508
 BASE_CIRCLE_OFFSET_X = -5
@@ -35,18 +36,23 @@ BASE_ALPHABET_OFFSET_X = -13
 BASE_CROSS_OFFSET_X = -6
 BASE_BAR_WIDTH = 1620
 BASE_BAR_SHIFT_X = 88
-font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
-font_size_true = int(12 / (1086 / 3508))
 text_offset_y = 4
 
+# フォント
+font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+base_font_size = int(12 / (1086 / 3508))  # 既存と同じ基準
+
+# =============== ユーティリティ ===============
 def clean_frame_column(series):
     series = series.astype(str).str.strip().map(lambda x: unicodedata.normalize("NFKC", x))
     series = pd.to_numeric(series, errors='coerce')
     return series
 
+
 def read_csv_flexibly(file_bytes):
     try:
         df = pd.read_csv(io.BytesIO(file_bytes), encoding="shift_jis", header=[0, 1], keep_default_na=False)
+        # 2段ヘッダーをフラット化（LO配下の列名を第二レベルで採用）
         df.columns = [col[1] if col[1] != '' else col[0] for col in df.columns]
         if 'Unnamed: 0_level_1' in df.columns:
             df = df.rename(columns={'Unnamed: 0_level_1': 'Frame'})
@@ -55,7 +61,9 @@ def read_csv_flexibly(file_bytes):
         st.error(f"CSVの読み込みに失敗しました: {e}")
         return pd.DataFrame()
 
+
 def preprocess_cells(df_raw, valid_cells):
+    """各列の最初の空白にだけ × を入れる（その列が完全空は除外）。"""
     for cell in valid_cells:
         if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
             continue
@@ -70,186 +78,229 @@ def preprocess_cells(df_raw, valid_cells):
                 seen_content = True
     return df_raw
 
-def get_book_positions(df):
-    book_cols = [col for col in df.columns if re.match(r"_book\\d+", col)]
+
+def get_book_positions(df, valid_cells):
+    """_book列の“列順”から、挿入位置（before_/between_/after_）を決める。
+    隣接の非_book列（A〜H）を左右にサーチして決定するので、端に来ても安全。
+    返り値: {book_col: "before_A" / "between_A_B" / "after_H" など}
+    """
+    cols = list(df.columns)
+    book_cols = [c for c in cols if re.match(r"_book\d+", c)]
     positions = {}
-    for book_col in book_cols:
-        idx = df.columns.get_loc(book_col)
-        if idx == 0:
-            insert_pos = "before_A"
-        elif idx + 1 < len(df.columns):
-            insert_pos = f"between_{df.columns[idx-1]}_{df.columns[idx+1]}"
+    for b in book_cols:
+        idx = cols.index(b)
+        # 左右の近い A〜H を探す
+        left_cell = None
+        for i in range(idx - 1, -1, -1):
+            if cols[i] in valid_cells:
+                left_cell = cols[i]
+                break
+        right_cell = None
+        for i in range(idx + 1, len(cols)):
+            if cols[i] in valid_cells:
+                right_cell = cols[i]
+                break
+        if left_cell is None and right_cell is None:
+            # 周囲にA〜Hが見つからないならスキップ
+            continue
+        if left_cell is None and right_cell is not None:
+            positions[b] = f"before_{right_cell}"
+        elif left_cell is not None and right_cell is None:
+            positions[b] = f"after_{left_cell}"
         else:
-            insert_pos = f"after_{df.columns[idx-1]}"
-        positions[book_col] = insert_pos
+            positions[b] = f"between_{left_cell}_{right_cell}"
     return positions
 
-def draw_vertical_text(draw, text, x, y, font):
-    for i, char in enumerate(text):
-        draw.text((x, y + i * font.size), char, fill=(0, 0, 0, 255), font=font)
-
+# =============== 本体 ===============
 def generate_timesheet(file_bytes, preset):
-    first_frame_top_y_true = preset["first_frame_top_y_true"]
-    frame_height_true = preset["frame_height_true"]
-    cell_x_positions_true = preset["cell_x_positions_true"]
-    column_offset_x = preset["column_offset_x"]
+    # プリセット読込
     true_width = preset["true_width"]
     true_height = preset["true_height"]
+    frame_height_true = preset["frame_height_true"]
+    first_frame_top_y_true = preset["first_frame_top_y_true"]
+    column_offset_x = preset["column_offset_x"]
+    cell_x_positions_true = preset["cell_x_positions_true"]
 
-    scale_factor_h = frame_height_true / BASE_FRAME_HEIGHT
-    scale_factor_w = true_width / BASE_WIDTH
+    # スケール
+    scale_h = frame_height_true / BASE_FRAME_HEIGHT
+    scale_w = true_width / BASE_WIDTH
 
-    circle_offset_x_true = BASE_CIRCLE_OFFSET_X * scale_factor_w
-    circle_offset_y_true = BASE_CIRCLE_OFFSET_Y * scale_factor_h
-    alphabet_offset_x_true = BASE_ALPHABET_OFFSET_X * scale_factor_w
-    cross_offset_x_true = BASE_CROSS_OFFSET_X * scale_factor_w
+    circle_offset_x = BASE_CIRCLE_OFFSET_X * scale_w
+    circle_offset_y = BASE_CIRCLE_OFFSET_Y * scale_h
+    alphabet_offset_x = BASE_ALPHABET_OFFSET_X * scale_w
+    cross_offset_x = BASE_CROSS_OFFSET_X * scale_w
+    bar_width = BASE_BAR_WIDTH * scale_w
+    bar_shift_x = BASE_BAR_SHIFT_X * scale_w
 
-    bar_width = BASE_BAR_WIDTH * scale_factor_w
-    bar_shift_x = BASE_BAR_SHIFT_X * scale_factor_w
+    # フォント
+    font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
+    font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
+    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))  # bookラベル用
 
-    font_large_scaled = ImageFont.truetype(font_path, size=int(font_size_true * scale_factor_h))
-    font_small_scaled = ImageFont.truetype(font_path, size=int(font_size_true * 0.9 * scale_factor_h))
-
-    df_raw = read_csv_flexibly(file_bytes)
-    if df_raw.empty or 'Frame' not in df_raw.columns:
+    # CSV
+    df = read_csv_flexibly(file_bytes)
+    if df.empty or 'Frame' not in df.columns:
         return [], 0
 
-    df_raw['Frame'] = clean_frame_column(df_raw['Frame'])
-    df_raw = df_raw.dropna(subset=['Frame'])
-    df_raw['Frame'] = df_raw['Frame'].astype(int)
-    df_raw = df_raw[df_raw['Frame'] > 0]
+    df['Frame'] = clean_frame_column(df['Frame'])
+    df = df.dropna(subset=['Frame'])
+    df['Frame'] = df['Frame'].astype(int)
+    df = df[df['Frame'] > 0]
+    if df.empty:
+        return [], 0
 
-    valid_cells = [cell for cell in cell_offsets if cell in df_raw.columns]
-    df_raw = preprocess_cells(df_raw, valid_cells)
+    valid_cells = [c for c in CELLS_ALL if c in df.columns]
+    df = preprocess_cells(df, valid_cells)
 
-    book_positions = get_book_positions(df_raw)
-    max_frame_num = df_raw['Frame'].max()
+    # _book の列順から挿入位置を決定
+    book_positions = get_book_positions(df, valid_cells)
+
+    max_frame = df['Frame'].max()
     frames_per_page = 144
-    total_pages = math.ceil(max_frame_num / frames_per_page)
+    total_pages = math.ceil(max_frame / frames_per_page)
+
     result_images = []
 
     for page in range(total_pages):
-        img = Image.new("RGBA", (true_width, true_height), (0, 0, 0, 0))
+        img = Image.new("RGBA", (true_width, true_height), (255, 255, 255, 0))
         draw = ImageDraw.Draw(img)
-        start_frame = page * frames_per_page + 1
-        end_frame = (page + 1) * frames_per_page
-        df_page = df_raw[(df_raw['Frame'] >= start_frame) & (df_raw['Frame'] <= end_frame)]
-        last_frame_in_page = df_page['Frame'].max() if not df_page.empty else None
 
+        start = page * frames_per_page + 1
+        end = (page + 1) * frames_per_page
+        df_page = df[(df['Frame'] >= start) & (df['Frame'] <= end)]
+        if df_page.empty:
+            result_images.append(img)
+            continue
+
+        last_frame_in_page = df_page['Frame'].max()
+
+        # ---- 通常セル描画 ----
         for cell in valid_cells:
-            x_base_true = cell_x_positions_true[cell]
+            x_base = cell_x_positions_true[cell]
             for _, row in df_page.iterrows():
-                frame_num = int(row['Frame'])
+                frame = int(row['Frame'])
                 timing = str(row[cell]) if not pd.isna(row[cell]) else ""
-                frame_in_column_total = (frame_num - 1) % frames_per_page
-                column = frame_in_column_total // 72
-                frame_in_column = frame_in_column_total % 72
-                y_true = first_frame_top_y_true + frame_in_column * frame_height_true
-                x_true = x_base_true if column == 0 else x_base_true + column_offset_x
-                y_draw_true = y_true + text_offset_y
+                idx = (frame - 1) % frames_per_page
+                col_block = idx // 72  # 0: 左, 1: 右
+                row_pos = idx % 72
+                y = first_frame_top_y_true + row_pos * frame_height_true
+                x = x_base if col_block == 0 else x_base + column_offset_x
+                y_draw = y + text_offset_y
 
-                if timing == '●' or timing == '○':
-                    x_true += circle_offset_x_true
-                    y_draw_true += circle_offset_y_true
+                if timing in ('●', '○'):
+                    x += circle_offset_x
+                    y_draw += circle_offset_y
                 elif timing == '×':
-                    x_true += cross_offset_x_true
-                elif re.match(r"^\\d+[a-zA-Z]$", timing) or re.fullmatch(r"\\d{2,}", timing):
-                    x_true += alphabet_offset_x_true
+                    x += cross_offset_x
+                elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
+                    x += alphabet_offset_x
 
-                font = font_small_scaled if len(timing) >= 3 else font_large_scaled
-                draw.text((x_true, y_draw_true), timing, fill=(0, 0, 0, 255), font=font)
+                font = font_small if len(timing) >= 3 else font_large
+                draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-# 先頭あたりのフォント用意の近くで追加（小さめのラベル用）
-label_font = ImageFont.truetype(font_path, size=int(font_size_true * 0.9 * scale_factor_h))
-
-# …中略…
-
-        # ===== book描画（縦線＋水平ラベル） =====
+        # ---- bookマーカー描画（縦線＋水平"book"ラベル） ----
         for _, row in df_page.iterrows():
-            frame_num = int(row['Frame'])
-            frame_in_column_total = (frame_num - 1) % frames_per_page
-            column = frame_in_column_total // 72       # 左=0 / 右=1
-            frame_in_column = frame_in_column_total % 72
-            y_true = first_frame_top_y_true + frame_in_column * frame_height_true
-            x_col_offset = column_offset_x if column == 1 else 0
+            frame = int(row['Frame'])
+            idx = (frame - 1) % frames_per_page
+            col_block = idx // 72
+            row_pos = idx % 72
+            y = first_frame_top_y_true + row_pos * frame_height_true
+            x_col = column_offset_x if col_block == 1 else 0
 
-            for book_col, position in book_positions.items():
-                # この行にその book が存在するか（空ならスキップ）
+            for book_col, pos in book_positions.items():
+                # この行でbook列に値が入っているときだけ描画
                 if book_col not in row or str(row[book_col]).strip() == "":
                     continue
 
-                # ラベルは列名から（_book1 → book1）
-                label = book_col.replace("_", "")
-
-                # 位置→x座標の決定
+                # 位置→x座標決定
                 x_insert = None
-                if position.startswith("before_"):
-                    target = position.replace("before_", "")
+                if pos.startswith("before_"):
+                    target = pos.replace("before_", "")
                     if target in cell_x_positions_true:
-                        x_insert = cell_x_positions_true[target] - 10 * scale_factor_w
-                elif position.startswith("between_"):
-                    parts = position.split("_")
+                        x_insert = cell_x_positions_true[target] - 10 * scale_w
+                elif pos.startswith("between_"):
+                    parts = pos.split("_")
                     if len(parts) == 3:
                         _, left, right = parts
                         if left in cell_x_positions_true and right in cell_x_positions_true:
                             x_insert = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
-                elif position.startswith("after_"):
-                    target = position.replace("after_", "")
+                elif pos.startswith("after_"):
+                    target = pos.replace("after_", "")
                     if target in cell_x_positions_true:
-                        x_insert = cell_x_positions_true[target] + 10 * scale_factor_w
+                        x_insert = cell_x_positions_true[target] + 10 * scale_w
 
                 if x_insert is None:
                     continue
 
-                x_insert += x_col_offset
+                x_insert += x_col
 
-                # 縦線の描画（1コマ分ちょい長め）
-                line_top = y_true - 4 * scale_factor_h
-                line_bottom = y_true + frame_height_true + 2 * scale_factor_h
-                line_w = max(1, int(2 * scale_factor_w))
+                # 縦線（1コマ分＋余白）
+                line_top = y - 4 * scale_h
+                line_bottom = y + frame_height_true + 2 * scale_h
+                line_w = max(1, int(2 * scale_w))
                 draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
-                # ラベルを縦線の上に水平配置（中央寄せ）
-                # textbboxで横幅を測って中央合わせ
+                # ラベルは固定で"book"（要望通り）。中央寄せで線の少し上に。
+                label = "book"
                 bbox = draw.textbbox((0, 0), label, font=label_font)
                 label_w = bbox[2] - bbox[0]
                 label_h = bbox[3] - bbox[1]
                 label_x = x_insert - label_w / 2
-                label_y = line_top - label_h - 2 * scale_factor_h  # 線の上に少し余白
+                label_y = line_top - label_h - 2 * scale_h
                 draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
-# UI
-st.title("ちゃいむしーと Web版 v1.9.3：book縦書き対応")
-selected_preset_name = st.selectbox("会社プリセットを選択してください", list(presets.keys()))
-preset_cfg = presets[selected_preset_name]
 
-uploaded_file = st.file_uploader("CSVファイルをアップロードしてください", type=["csv"])
-if uploaded_file is not None and st.button("タイムシート生成！"):
-    pages, total_frames = generate_timesheet(uploaded_file.read(), preset_cfg)
-    if not pages:
-        st.warning("有効なFrameデータが見つかりませんでした。")
-    else:
-        seconds = total_frames // 24
-        remainder = total_frames % 24
-        st.text_input("TIME", value=f"{seconds} + {remainder}")
+        # ---- 黒バー（ページ末尾） ----
+        if last_frame_in_page:
+            idx_last = (last_frame_in_page - 1) % frames_per_page
+            col_last = idx_last // 72
+            row_last = idx_last % 72
+            bar_y = first_frame_top_y_true + (row_last + 1) * frame_height_true
+            bar_x = 0 if col_last == 0 else column_offset_x
+            draw.rectangle(
+                [(bar_x + 5 + bar_shift_x, bar_y),
+                 (bar_x + 5 + bar_shift_x + bar_width, bar_y + frame_height_true * 2)],
+                fill=(0, 0, 0, 128)
+            )
 
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for idx, page_img in enumerate(pages):
-                st.write(f"ページ {idx+1}")
-                st.image(page_img, caption=f"Page {idx+1}", use_container_width=True)
-                img_bytes = io.BytesIO()
-                page_img.save(img_bytes, format='PNG')
-                zip_file.writestr(f"timesheet_page_{idx+1}.png", img_bytes.getvalue())
-                st.download_button(
-                    label=f"⬇️ ダウンロード Page {idx+1}",
-                    data=img_bytes,
-                    file_name=f"timesheet_page_{idx+1}.png",
-                    mime="image/png"
-                )
-        zip_buffer.seek(0)
-        st.download_button(
-            label="📦 すべてまとめてダウンロード（ZIP）",
-            data=zip_buffer,
-            file_name="timesheets_all.zip",
-            mime="application/zip"
-        )
+        result_images.append(img)
+
+    return result_images, max_frame
+
+# =============== Streamlit UI ===============
+st.title("ちゃいむしーと Web版 v1.9.4｜bookマーカー（縦線＋水平ラベル）対応")
+selected_preset = st.selectbox("会社プリセットを選択", list(presets.keys()))
+preset_cfg = presets[selected_preset]
+
+uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["csv"])
+
+if uploaded_file is not None:
+    if st.button("タイムシート生成！"):
+        pages, total_frames = generate_timesheet(uploaded_file.read(), preset_cfg)
+        if not pages:
+            st.warning("有効なFrameデータが見つかりませんでした。")
+        else:
+            seconds = total_frames // 24
+            remainder = total_frames % 24
+            st.text_input("TIME", value=f"{seconds} + {remainder}")
+
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for i, page in enumerate(pages):
+                    st.image(page, caption=f"Page {i+1}", use_container_width=True)
+                    b = io.BytesIO()
+                    page.save(b, format='PNG')
+                    b.seek(0)
+                    zipf.writestr(f"timesheet_page_{i+1}.png", b.getvalue())
+                    st.download_button(
+                        label=f"⬇️ Page {i+1} ダウンロード",
+                        data=b.getvalue(),
+                        file_name=f"timesheet_page_{i+1}.png",
+                        mime="image/png"
+                    )
+            zip_buffer.seek(0)
+            st.download_button(
+                label="📦 すべてまとめてダウンロード（ZIP）",
+                data=zip_buffer,
+                file_name="timesheets_all.zip",
+                mime="application/zip"
+            )

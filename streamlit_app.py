@@ -274,52 +274,53 @@ def generate_timesheet(file_bytes, preset):
                 line_gap = 2 * scale_h
                 margin   = 12 * scale_w
 
-                # この位置で一番上に来たラベルのy
-                min_label_y = None
+               # この位置で一番上に来たラベルのy
+               min_label_y = None
+               # ★追加：最上段ラベルの下端(y+高さ)を記録しておく
+               top_label_bottom = None
 
-                # ラベルを上から順に置く
-                for idx_item, (_, label) in enumerate(items):
-                    # サイズ
-                    bbox = draw.textbbox((0, 0), label, font=label_font)
-                    lw = bbox[2] - bbox[0]
-                    lh = bbox[3] - bbox[1]
+               # ラベルを上から順に置く
+               for idx_item, (_, label) in enumerate(items):
+                   bbox = draw.textbbox((0, 0), label, font=label_font)
+                   lw = bbox[2] - bbox[0]
+                   lh = bbox[3] - bbox[1]
 
-                    # 一番上（book最大）から順に下へ
-                    base_y = (base_line_top - lh - 2 * scale_h) - idx_item * (lh + line_gap)
+                   base_y = (base_line_top - lh - 2 * scale_h) - idx_item * (lh + line_gap)
 
-                    # 縦線中心で水平センター
-                    lx_center = book_x - (lw / 2)
-                    ly = base_y
+                   lx_center = book_x - (lw / 2)
+                   ly = base_y
 
-                    # 左右端クランプ（縦線は動かさない）
-                    lx = max(margin, min(true_width - margin - lw, lx_center))
+                   lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                    # 同行の他ラベルと当たったらさらに上へ
-                    def overlap(a, b):
-                        ax1, ay1, ax2, ay2 = a
-                        bx1, by1, bx2, by2 = b
-                        return not (ax2 <= bx1 or bx2 <= ax1 or ay2 <= by1 or by2 <= ay1)
+                   def overlap(a, b):
+                       ax1, ay1, ax2, ay2 = a
+                       bx1, by1, bx2, by2 = b
+                       return not (ax2 <= bx1 or bx2 <= ax1 or ay2 <= by1 or by2 <= ay1)
 
-                    cur = (lx, ly, lx + lw, ly + lh)
-                    while any(overlap(cur, box) for box in placed_boxes):
-                        ly -= (lh + line_gap)
-                        cur = (lx, ly, lx + lw, ly + lh)
+                   cur = (lx, ly, lx + lw, ly + lh)
+                   while any(overlap(cur, box) for box in placed_boxes):
+                       ly -= (lh + line_gap)
+                       cur = (lx, ly, lx + lw, ly + lh)
 
-                    # ラベル描画＆登録
-                    draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
-                    placed_boxes.append(cur)
+                   draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
+                   placed_boxes.append(cur)
 
-                    if (min_label_y is None) or (ly < min_label_y):
-                        min_label_y = ly
+                   if (min_label_y is None) or (ly < min_label_y):
+                       min_label_y = ly
+                       # ★追加：最上段ラベル（いちばん上に来たやつ）の“下端”を保持
+                       top_label_bottom = ly + lh
 
-                # ---- ラベルを置いた“後”で縦線を描画（上に延長）----
-                line_top    = base_line_top
-                line_bottom = base_line_bottom
-                if min_label_y is not None and (min_label_y - 2 * scale_h) < line_top:
-                    line_top = min_label_y - 2 * scale_h
+               # ---- ラベルを置いた“後”で縦線を描画（上に延長）----
+               line_top    = base_line_top
+               line_bottom = base_line_bottom
 
-                line_w = max(1, int(2 * scale_w))
-                draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
+               # ★変更：縦線の上端は「最上段ラベルの下端＋余白」に合わせる（貫通防止）
+               if top_label_bottom is not None:
+                   pad = 2 * scale_h  # 余白（お好みで 1〜3 * scale_h）
+                   line_top = max(base_line_top, top_label_bottom + pad)
+
+               line_w = max(1, int(2 * scale_w))
+               draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
         # ---- 黒バー（ページ末尾） ----
         if last_frame_in_page:

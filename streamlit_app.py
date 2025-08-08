@@ -15,7 +15,6 @@ presets = {
         "column_offset_x": 1690,
         "true_width": 3508,
         "true_height": 4961,
-        # デフォルト（要望どおり）
         "default_book_koma": 6,
         "default_celllabel_koma": 2,
     },
@@ -26,7 +25,6 @@ presets = {
         "column_offset_x": 870,
         "true_width": 1754,
         "true_height": 2480,
-        # デフォルト（要望どおり）
         "default_book_koma": 5,
         "default_celllabel_koma": 0,
     }
@@ -43,10 +41,9 @@ BASE_BAR_WIDTH = 1620
 BASE_BAR_SHIFT_X = 88
 text_offset_y = 4
 
-# bookラインの旧デフォ（線の下端算出に使用）
 BASE_BOOK_OFFSET_KOMA = 3
 
-# セル名の微調整
+# セル名オフセット（px基準 → スケール）
 HEADER_X_NUDGE_PX      = 10   # 右に10px（負で左）
 HEADER_BOTTOM_NUDGE_PX = -80  # 下端基準から上に80px（負で上）
 
@@ -62,7 +59,7 @@ def clean_frame_column(series):
     return series
 
 def normalize_for_vertical(text: str) -> str:
-    """セル名の縦書き専用：横棒っぽい文字を縦棒に統一"""
+    # セル名の縦書き用：横棒を縦棒に
     return (text
             .replace("ー", "｜").replace("ｰ", "｜")
             .replace("－", "｜").replace("―", "｜")
@@ -81,7 +78,7 @@ def read_csv_flexibly(file_bytes):
         return pd.DataFrame()
 
 def preprocess_cells(df_raw, valid_cells):
-    """各列で最初の空白だけ×を入れる（列が完全空欄なら何もしない）"""
+    # 各列の最初の空白だけ × を入れる（列が完全空欄なら何もしない）
     for cell in valid_cells:
         if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
             continue
@@ -97,7 +94,7 @@ def preprocess_cells(df_raw, valid_cells):
     return df_raw
 
 def get_book_positions(df, valid_cells):
-    """_book列の左右の A〜H を見て、before/between/after を決める"""
+    # _book列の左右の A〜H を見て、before/between/after を決める
     cols = list(df.columns)
     book_cols = [c for c in cols if re.match(r"^_?book\d+$", str(c), re.IGNORECASE)]
     positions = {}
@@ -128,25 +125,23 @@ def is_filled(v):
     s = norm_str(v)
     return s not in ("", "nan", "None")
 
-# === セル名：縦書き（下揃え） ===
+# 縦書き（セル名・下揃え）
 def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
     if not text:
         return
     text = normalize_for_vertical(text)
-    boxes = []
-    total_h = 0
+    boxes, total_h = [], 0
     for ch in text:
         bbox = draw.textbbox((0, 0), ch, font=font)
         w = bbox[2] - bbox[0]; h = bbox[3] - bbox[1]
         boxes.append((ch, w, h)); total_h += h
     total_h += spacing * (len(boxes) - 1 if boxes else 0)
-
     y = bottom_y - total_h
     for ch, w, h in boxes:
         draw.text((bottom_x - w/2.0, y), ch, fill=(0,0,0,255), font=font)
         y += h + spacing
 
-# === bookのX座標（before/between/after） ===
+# book X座標（before/between/after）
 def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
     book_x = None
     if pos.startswith("before_"):
@@ -166,13 +161,9 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
     return book_x
 
 # =============== 本体 ===============
-def generate_timesheet(
-    file_bytes, preset, show_books=True, book_offset_koma=6,
-    cell_labels=None, celllabel_koma=2
-):
+def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, cell_labels=None, celllabel_koma=2):
     # プリセット
-    true_width = preset["true_width"]
-    true_height = preset["true_height"]
+    true_width = preset["true_width"]; true_height = preset["true_height"]
     frame_height_true = preset["frame_height_true"]
     first_frame_top_y_true = preset["first_frame_top_y_true"]
     column_offset_x = preset["column_offset_x"]
@@ -243,21 +234,19 @@ def generate_timesheet(
 
         last_frame_in_page = df_page['Frame'].max()
 
-        # ---- セル名ヘッダ（1ページ目だけ・縦書き・左カラムのみ・下揃え・枠なし）----
+        # ---- セル名（1ページ目のみ・左カラム・縦書き下揃え）----
         if page == 0:
             header_bottom_y = (first_frame_top_y_true
                                - celllabel_koma * frame_height_true
                                + (HEADER_BOTTOM_NUDGE_PX * scale_h))
             glyph_spacing = 2 * scale_h
-            x_col = 0  # 左カラムのみ
             for cell in valid_cells:
                 label = (cell_labels.get(cell) or "").strip()
                 if not label:
                     continue
-                x_center = x_col + cell_x_positions_true[cell] + (HEADER_X_NUDGE_PX * scale_w)
+                x_center = cell_x_positions_true[cell] + (HEADER_X_NUDGE_PX * scale_w)
                 draw_vertical_bottom(
-                    draw,
-                    label,
+                    draw, label,
                     bottom_x=x_center,
                     bottom_y=header_bottom_y,
                     font=cell_label_font,
@@ -287,7 +276,7 @@ def generate_timesheet(
                 font = font_small if len(timing)>=3 else font_large
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
 
-        # ---- book マーカー（枠付き・重なり回避・突き抜け防止）----
+        # ---- book マーカー（行内共有の重なり回避／枠は飾り）----
         if show_books:
             for _, row in df_page.iterrows():
                 frame = int(row['Frame'])
@@ -305,10 +294,8 @@ def generate_timesheet(
                     if (cname in row.index) and is_filled(row[cname]):
                         present.setdefault(pos, []).append(cname)
 
-                # 行内共有の当たり判定（テキスト枠の外形で判定）
-                placed_boxes_row = []
+                placed_boxes_row = []  # 行内で共有（テキスト矩形のみ）
 
-                # 位置→x を先に出して x昇順で処理
                 entries = []
                 for pos, books_here in present.items():
                     bx = calc_book_x(pos, cell_x_positions_true, koma_width, scale_w)
@@ -320,7 +307,7 @@ def generate_timesheet(
                     base_line_top    = y_ref - 4*scale_h
                     base_line_bottom = y_ref + (frame_height_true*2) + 2*scale_h
 
-                    # ラベル順（若い番号→上）
+                    # 若い番号→上
                     items = []
                     for b in books_here:
                         s = norm_str(b).replace("_","")
@@ -329,69 +316,61 @@ def generate_timesheet(
                         items.append((n, s))
                     items.sort(key=lambda t: t[0])
 
-                   # 見た目＆回避量（少し控えめに）
-                   line_gap    = 3*scale_h        # 以前より小さめ
-                   extra_shift = 3*scale_h        # ぶつかった時の追加上げ量
-                   margin      = 12*scale_w
+                    # 調整（控えめ設定）
+                    line_gap    = 3*scale_h       # 階段の基本間隔
+                    extra_shift = 3*scale_h       # ぶつかった時の追加上げ量
+                    margin      = 12*scale_w
 
-                   # 枠の余白（枠は飾り。判定には使わない）
-                   rect_pad_x = 2*scale_w
-                   rect_pad_y = 2*scale_h
-                   rect_w     = max(1, int(1.5*scale_w))
+                    # 枠の見た目設定（判定には使わない）
+                    rect_pad_x = 2*scale_w
+                    rect_pad_y = 2*scale_h
+                    rect_w     = max(1, int(1.5*scale_w))
 
-                   bottom_label_bottom = None
+                    bottom_label_bottom = None
 
-                   def overlap(a,b):
-                       ax1,ay1,ax2,ay2 = a
-                       bx1,by1,bx2,by2 = b
-                       return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
+                    def overlap(a,b):
+                        ax1,ay1,ax2,ay2 = a
+                        bx1,by1,bx2,by2 = b
+                        return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
-                   for idx_item, (_, label) in enumerate(items):
-                       # テキストサイズ
-                       bbox = draw.textbbox((0, 0), label, font=label_font)
-                       lw = bbox[2] - bbox[0]
-                       lh = bbox[3] - bbox[1]
+                    for idx_item, (_, label) in enumerate(items):
+                        # テキストサイズ
+                        bbox = draw.textbbox((0, 0), label, font=label_font)
+                        lw = bbox[2] - bbox[0]
+                        lh = bbox[3] - bbox[1]
 
-                       # 初期配置（上から順）
-                       base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
-                       lx_center = book_x - (lw/2)
-                       ly = base_y
-                       lx = max(margin, min(true_width - margin - lw, lx_center))
+                        # 初期配置
+                        base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
+                        lx_center = book_x - (lw/2)
+                        ly = base_y
+                        lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                       # ★ 当たり判定はテキストの矩形のみで行う（枠は使わない） ←ここ変更
-                       cur_text = (lx, ly, lx+lw, ly+lh)
-                       while any(overlap(cur_text, box) for box in placed_boxes_row):
-                           ly -= (lh + line_gap + extra_shift)
-                           cur_text = (lx, ly, lx+lw, ly+lh)
+                        # ★ 当たり判定はテキスト矩形だけ
+                        cur_text = (lx, ly, lx+lw, ly+lh)
+                        while any(overlap(cur_text, box) for box in placed_boxes_row):
+                            ly -= (lh + line_gap + extra_shift)
+                            cur_text = (lx, ly, lx+lw, ly+lh)
 
-                       # テキスト描画
-                       draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
+                        # テキスト描画
+                        draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
 
-                       # 枠はあとから“飾り”として描く（判定には使わない） ←ここ変更
-                       rect = (lx - rect_pad_x, ly - rect_pad_y,
-                               lx + lw + rect_pad_x, ly + lh + rect_pad_y)
-                       draw.rectangle(rect, outline=(0,0,0,255), width=rect_w)
+                        # 枠は飾りとして後描画（判定には使わない）
+                        rect = (lx - rect_pad_x, ly - rect_pad_y,
+                                lx + lw + rect_pad_x, ly + lh + rect_pad_y)
+                        draw.rectangle(rect, outline=(0,0,0,255), width=rect_w)
 
-                       # 行内の衝突管理はテキスト矩形で持つ ←ここ変更
-                       placed_boxes_row.append(cur_text)
+                        # 行内の衝突管理はテキスト矩形で持つ
+                        placed_boxes_row.append(cur_text)
 
-                       # いちばん下の“テキスト底”で更新（線の起点用） ←ここ変更
-                       if (bottom_label_bottom is None) or (ly + lh > bottom_label_bottom):
-                           bottom_label_bottom = ly + lh
+                        # いちばん下の“テキスト底”
+                        if (bottom_label_bottom is None) or (ly + lh > bottom_label_bottom):
+                            bottom_label_bottom = ly + lh
 
-                   # 線はテキスト底 + 少し下 からに戻す ←ここ変更
-                   pad_top   = 2 * scale_h
-                   line_top  = (bottom_label_bottom + pad_top) if bottom_label_bottom is not None else base_line_top
-                   extra_len = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
-                   line_bottom = max(line_top + 1, base_line_bottom + extra_len)
-                   line_w = max(1, int(2*scale_w))
-                   draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0,0,0,255), width=line_w)
-
-                    # ラインは「最下段の枠の少し下」から
-                    pad_top = 2*scale_h
-                    line_top = (bottom_rect_bottom + pad_top) if bottom_rect_bottom is not None else base_line_top
-                    extra_len_by_koma = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
-                    line_bottom = max(line_top + 1, base_line_bottom + extra_len_by_koma)
+                    # 線はテキスト底 + 少し下 から
+                    pad_top = 2 * scale_h
+                    line_top = (bottom_label_bottom + pad_top) if bottom_label_bottom is not None else base_line_top
+                    extra_len = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
+                    line_bottom = max(line_top + 1, base_line_bottom + extra_len)
                     line_w = max(1, int(2*scale_w))
                     draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0,0,0,255), width=line_w)
 
@@ -414,7 +393,7 @@ def generate_timesheet(
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v3.1.0｜bookは枠付き・セル名は枠なし縦書き")
+st.title("ちゃいむしーと Web版 v3.1.0｜book枠は飾り（テキスト基準で衝突回避）")
 
 # プリセット選択
 selected_preset = st.selectbox("会社プリセット", list(presets.keys()))
@@ -432,7 +411,7 @@ with c2:
 with c3:
     celllabel_koma = st.slider("セル名の高さ（何コマ上）", 0, 6, int(default_celllabel_koma), 1)
 
-# セル名（縦書き）の入力（1ページ目だけ描画／日本語OK）
+# セル名入力（1ページ目・縦書き）
 with st.expander("セル名（A〜H）を入力（縦書き・1ページ目のみ / 日本語OK）", expanded=True):
     default_labels = {c: "" for c in CELLS_ALL}
     cols = st.columns(4)

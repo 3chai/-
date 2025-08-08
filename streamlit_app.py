@@ -41,12 +41,12 @@ text_offset_y = 4
 BASE_BOOK_OFFSET_KOMA = 3
 
 # ヘッダ（セル名）固定オフセット（px基準）— プリセットに合わせてスケールされる
-HEADER_X_NUDGE_PX = 10   # 右に10px
-HEADER_Y_NUDGE_PX = -80  # 上に80px（マイナスで上）
+HEADER_X_NUDGE_PX      = 10   # 右に10px（負で左）
+HEADER_BOTTOM_NUDGE_PX = -80  # 下端基準から上に80px（負で上）
 
 # フォント
-font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")                 # 既存（数字・記号用）
-jp_font_path = os.path.join(os.path.dirname(__file__), "NotoSansJP-Regular.otf")      # 日本語対応（セル名用）
+font_path   = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+jp_font_path = os.path.join(os.path.dirname(__file__), "NotoSansJP-Regular.otf")
 base_font_size = int(12 / (1086 / 3508))
 
 # =============== ユーティリティ ===============
@@ -58,12 +58,9 @@ def clean_frame_column(series):
 def normalize_for_vertical(text: str) -> str:
     """セル名の縦書き専用：横棒っぽい文字を縦棒に統一"""
     return (text
-            .replace("ー", "｜")   # 長音
-            .replace("ｰ", "｜")   # 半角長音
-            .replace("－", "｜")  # 全角マイナス
-            .replace("―", "｜")  # ダッシュ
-            .replace("—", "｜")  # エムダッシュ
-            .replace("–", "｜"))  # エンダッシュ
+            .replace("ー", "｜").replace("ｰ", "｜")
+            .replace("－", "｜").replace("―", "｜")
+            .replace("—", "｜").replace("–", "｜"))
 
 def read_csv_flexibly(file_bytes):
     try:
@@ -125,15 +122,15 @@ def is_filled(v):
     s = norm_str(v)
     return s not in ("", "nan", "None")
 
-# === 縦書き描画（セル名用） ===
-def draw_vertical_centered(draw, text, center_x, center_y, font, spacing=0):
+# === 縦書き描画（セル名用・下揃え） ===
+def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
     """
-    text を縦書きで、(center_x, center_y) を縦列の中心にして描画する。
+    text を縦書きで、(bottom_x, bottom_y) を“縦列の下端”にして描画。
     spacing は各文字間のpx。
     """
     if not text:
         return
-    text = normalize_for_vertical(text)  # ← 横棒→縦棒 変換を適用（セル名のみ）
+    text = normalize_for_vertical(text)
     boxes = []
     total_h = 0
     for ch in text:
@@ -144,9 +141,10 @@ def draw_vertical_centered(draw, text, center_x, center_y, font, spacing=0):
         total_h += h
     total_h += spacing * (len(boxes) - 1 if boxes else 0)
 
-    y = center_y - total_h / 2.0
+    # 下端から上へ積み上げ
+    y = bottom_y - total_h
     for ch, w, h in boxes:
-        draw.text((center_x - w / 2.0, y), ch, fill=(0, 0, 0, 255), font=font)
+        draw.text((bottom_x - w / 2.0, y), ch, fill=(0, 0, 0, 255), font=font)
         y += h + spacing
 
 # =============== 本体 ===============
@@ -180,12 +178,10 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
         diffs.sort()
         koma_width = diffs[len(diffs)//2] if diffs else 0.0
 
-    # フォント（数字・記号）
+    # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
     label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))      # book
-
-    # セル名（縦書き）は日本語対応フォント（NotoSansJP）。なければ DejaVu にフォールバック
     try:
         cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.9 * scale_h))
     except Exception:
@@ -227,9 +223,12 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
         last_frame_in_page = df_page['Frame'].max()
 
-        # ---- セル名ヘッダ（1ページ目だけ・縦書き・左カラムのみ）----
+        # ---- セル名ヘッダ（1ページ目だけ・縦書き・左カラムのみ・下揃え）----
         if page == 0:
-            header_center_y = first_frame_top_y_true - 2 * frame_height_true + (HEADER_Y_NUDGE_PX * scale_h)
+            # 「数字が始まる位置の2コマ上」を“下端”として使う
+            header_bottom_y = (first_frame_top_y_true
+                               - 2 * frame_height_true
+                               + (HEADER_BOTTOM_NUDGE_PX * scale_h))
             glyph_spacing = 2 * scale_h
             x_col = 0  # 左カラムのみ
             for cell in valid_cells:
@@ -237,11 +236,11 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 if not label:
                     continue
                 x_center = x_col + cell_x_positions_true[cell] + (HEADER_X_NUDGE_PX * scale_w)
-                draw_vertical_centered(
+                draw_vertical_bottom(
                     draw,
                     label,
-                    center_x=x_center,
-                    center_y=header_center_y,
+                    bottom_x=x_center,
+                    bottom_y=header_bottom_y,
                     font=cell_label_font,
                     spacing=glyph_spacing
                 )
@@ -269,7 +268,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 font = font_small if len(timing)>=3 else font_large
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
 
-        # ---- book マーカー（重なり回避あり）----
+        # ---- book マーカー（重なり回避＆突き抜け防止）----
         if show_books:
             for _, row in df_page.iterrows():
                 frame = int(row['Frame'])
@@ -286,8 +285,6 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     if (cname in row.index) and is_filled(row[cname]):
                         present.setdefault(pos, []).append(cname)
 
-                placed_boxes = []  # 行内の当たり判定
-
                 for pos, books_here in present.items():
                     # X座標（Aの前／間／後）
                     book_x = None
@@ -300,10 +297,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         if len(parts) == 3:
                             _, left, right = parts
                             if left in cell_x_positions_true and right in cell_x_positions_true:
-                                mid = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
-                                book_x = cell_x_positions_true[left] + 0.8 * koma_width - 3 * scale_w
-                                # もし「左から0.8コマ」派なら↓
-                                # book_x = cell_x_positions_true[left] + 0.8 * koma_width - 3 * scale_w
+                                # すべて “左セル中心 + 0.8コマ - 3px” に統一
+                                book_x = cell_x_positions_true[left] + 0.8 * (koma_width) - 3 * scale_w
                     elif pos.startswith("after_"):
                         tgt = pos.replace("after_","")
                         if tgt in cell_x_positions_true:
@@ -328,6 +323,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
                     line_gap = 2*scale_h
                     margin   = 12*scale_w
+
+                    # 位置ごとに、ラベルの“最下段の底”を求める
+                    placed_boxes = []
                     bottom_label_bottom = None
 
                     def overlap(a,b):
@@ -357,10 +355,10 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         if (bottom_label_bottom is None) or (ly + lh > bottom_label_bottom):
                             bottom_label_bottom = ly + lh
 
-                    # ラベル直下から線（上端）— 最下段ラベルに追従
+                    # ラベル直下から線（上端）— 最下段ラベルに追従（突き抜け防止）
                     pad_top = 2 * scale_h
                     line_top = bottom_label_bottom + pad_top if bottom_label_bottom is not None else base_line_top
-                    # 下端は book_offset_koma に応じて延長
+                    # 下端は book_offset_koma に応じて延長（BASE_BOOK_OFFSET_KOMA との差分で決める）
                     extra_len_by_koma = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
                     line_bottom = max(line_top + 1, base_line_bottom + extra_len_by_koma)
                     line_w = max(1, int(2*scale_w))
@@ -384,7 +382,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v2.8.0｜セル名 日本語＆「ー→｜」縦書き対応（1ページ目のみ）")
+st.title("ちゃいむしーと Web版 v2.9.0｜セル名“下揃え”＆book重なり回避")
 
 c1, c2 = st.columns(2)
 with c1:

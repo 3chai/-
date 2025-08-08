@@ -111,7 +111,7 @@ def is_filled(v):
     return s not in ("", "nan", "None")
 
 # =============== 本体 ===============
-def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6):
+def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, cell_labels=None):
     # プリセット
     true_width = preset["true_width"]
     true_height = preset["true_height"]
@@ -153,7 +153,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6):
     # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
-    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))
+    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))  # book
+    cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))  # セル名（少し大きめ）
 
     # CSV
     df = read_csv_flexibly(file_bytes)
@@ -176,6 +177,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6):
     total_pages = math.ceil(max_frame / frames_per_page)
     result_images = []
 
+    # セル名の辞書（Noneや空文字は描画しない）
+    cell_labels = cell_labels or {}
+
     for page in range(total_pages):
         img = Image.new("RGBA", (true_width, true_height), (255, 255, 255, 0))
         draw = ImageDraw.Draw(img)
@@ -187,6 +191,23 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6):
             result_images.append(img); continue
 
         last_frame_in_page = df_page['Frame'].max()
+
+        # ---- 列見出し（セル名）を左右両カラムの上に描画 ----
+        # y位置：表の最上段（first_frame_top）よりさらに上へ。bookの高さとも両立。
+        # だいたい「bookのラベル列よりもう少し上」くらいに置く。
+        header_y = first_frame_top_y_true - frame_height_true * max(1, book_offset_koma + 1.0)
+        for side in (0, 1):  # 0:左, 1:右
+            x_col = 0 if side == 0 else column_offset_x
+            for cell in valid_cells:
+                label = (cell_labels.get(cell) or "").strip()
+                if not label:
+                    continue
+                x_center = x_col + cell_x_positions_true[cell]
+                # 中央寄せ
+                bbox = draw.textbbox((0, 0), label, font=cell_label_font)
+                tw = bbox[2] - bbox[0]
+                th = bbox[3] - bbox[1]
+                draw.text((x_center - tw/2, header_y - th/2), label, fill=(0,0,0,255), font=cell_label_font)
 
         # ---- 通常セル ----
         for cell in valid_cells:
@@ -222,7 +243,6 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6):
                 row_y_base = first_frame_top_y_true + row_pos*frame_height_true
                 col_x_offset = column_offset_x if col_block==1 else 0
 
-                # この行でbook値が入っている列を位置ごとに
                 present = {}
                 for book_col, pos in book_positions.items():
                     cname = norm_str(book_col)
@@ -236,7 +256,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6):
                     if pos.startswith("before_"):
                         tgt = pos.replace("before_","")
                         if tgt in cell_x_positions_true:
-                            book_x = cell_x_positions_true[tgt] - 12.5 *scale_w  # ← Aの前の水平微調整
+                            book_x = cell_x_positions_true[tgt] - 10*scale_w  # Aの前の微調整
                     elif pos.startswith("between_"):
                         _, left, right = pos.split("_")
                         if left in cell_x_positions_true and right in cell_x_positions_true:
@@ -336,7 +356,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6):
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v2.2.0｜Book高さスライダーのみ")
+st.title("ちゃいむしーと Web版 v2.3.0｜セル名(キャラ名)ヘッダ描画つき")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -344,8 +364,17 @@ with c1:
 with c2:
     show_books = st.checkbox("Bookマーカーを描画する", value=True)
 
-# 高さスライダーのみ
+# 高さスライダーのみ（book）
 book_offset_koma = st.slider("Bookの高さ（何コマ上）", min_value=0, max_value=12, value=6, step=1)
+
+# セル名入力UI
+with st.expander("セル名（A〜H）の入力（空欄は描画なし）", expanded=True):
+    default_labels = {c: "" for c in CELLS_ALL}
+    cols = st.columns(4)
+    cell_labels = {}
+    for i, cell in enumerate(CELLS_ALL):
+        with cols[i % 4]:
+            cell_labels[cell] = st.text_input(f"{cell} セルのラベル", value=default_labels[cell], key=f"label_{cell}")
 
 preset_cfg = presets[selected_preset]
 uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["csv"])
@@ -356,7 +385,8 @@ if uploaded_file is not None:
             uploaded_file.read(),
             preset_cfg,
             show_books=show_books,
-            book_offset_koma=book_offset_koma
+            book_offset_koma=book_offset_koma,
+            cell_labels=cell_labels
         )
         if not pages:
             st.warning("有効なFrameデータが見つかりませんでした。")

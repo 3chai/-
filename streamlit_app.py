@@ -406,6 +406,15 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         # 線の起点用に最下段テキストの“実際の底”で更新
                         bottom_label_bottom = max(bottom_label_bottom or cur_padded[3], cur_padded[3])
 
+                    # ラベル直下から線（最下段ラベルに追従）
+                    pad_top = 2 * scale_h
+                    line_top = bottom_label_bottom + pad_top if bottom_label_bottom is not None else base_line_top
+                    # 下端は “高さスライダー”に応じて延長
+                    extra_len_by_koma = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
+                    line_bottom = max(line_top + 1, base_line_bottom + extra_len_by_koma)
+                    line_w = max(1, int(2*scale_w))
+                    draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0,0,0,255), width=line_w)
+
         # ---- 黒バー ----
         if last_frame_in_page:
             idx_last = (last_frame_in_page - 1) % frames_per_page

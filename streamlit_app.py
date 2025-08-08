@@ -198,13 +198,14 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small if len(timing) >= 3 else font_large
                 draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-        # ---- bookマーカー描画（複数時は線なし・テキストのみ） ----
+        # ---- bookマーカー描画（縦線＋水平ラベル／複数対応） ----
         for _, row in df_page.iterrows():
             frame = int(row['Frame'])
             idx = (frame - 1) % frames_per_page
             col_block = idx // 72
             row_pos = idx % 72
 
+            # 行の基準位置（このフレームの行の上端）
             y_base = first_frame_top_y_true + row_pos * frame_height_true
             x_col  = column_offset_x if col_block == 1 else 0
 
@@ -234,35 +235,32 @@ def generate_timesheet(file_bytes, preset):
                 if x_insert is None:
                     continue
 
-                # 列ブロックと指定オフセット反映：左に5px、上に3コマ
-                x_insert = x_insert + x_col - 5 * scale_w
-                y_ref = y_base - (frame_height_true * 3)
+                # 列ブロック／手動オフセット：左に5px、上に「1文字分」
+                x_insert = x_insert + x_col - 5
+                y_ref = y_base - label_font.size  # ← ここが「1文字分上」
 
-                if len(books_here) == 1:
-                    # 単独のときは従来どおり「縦線＋ラベル」
+                # 同位置のbookが複数なら左右に等間隔で並べる
+                n = len(books_here)
+                step = 12 * scale_w  # 横間隔(px)
+                start_offset = -step * (n - 1) / 2
+
+                for i, bcol in enumerate(books_here):
+                    xi = x_insert + (start_offset + step * i)
+
+                    # 縦線（+1コマ長く）
                     line_top = y_ref - 4 * scale_h
-                    line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h  # +1コマぶん長く
+                    line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
                     line_w = max(1, int(2 * scale_w))
-                    draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
+                    draw.line([(xi, line_top), (xi, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
-                    label = bcol.replace("_", "")  
+                    # ラベル（番号あり）
+                    label = bcol.replace("_", "")  # 例: "_book2" → "book2"
                     bbox = draw.textbbox((0, 0), label, font=label_font)
-                    label_x = x_insert - (bbox[2] - bbox[0]) / 2
-                    label_y = line_top - (bbox[3] - bbox[1]) - 2 * scale_h
-                    draw.text((label_x, label_y), label, fill=(0,0,0,255), font=label_font)
-
-                else:
-                    # 複数のときは「線なし」テキストのみを横にズラして並べる
-                    step = 12 * scale_w  # テキスト同士の間隔
-                    start_offset = -step * (len(books_here) - 1) / 2
-                    for i, bcol in enumerate(books_here):
-                        xi = x_insert + (start_offset + step * i)
-                        label = "book"  # 番号出したいなら： bcol.replace("_","")
-                        bbox = draw.textbbox((0, 0), label, font=label_font)
-                        label_x = xi - (bbox[2] - bbox[0]) / 2
-                        # 線がないので、単独時の線上端に相当する位置を基準に少し上へ
-                        label_y = (y_ref - 20 * scale_h) - (bbox[3] - bbox[1]) - 2 * scale_h
-                        draw.text((label_x, label_y), label, fill=(0,0,0,255), font=label_font)
+                    label_w = bbox[2] - bbox[0]
+                    label_h = bbox[3] - bbox[1]
+                    label_x = xi - (label_w / 2)
+                    label_y = line_top - label_h - 2 * scale_h  # 線の上に少し余白
+                    draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
                         
         # ---- 黒バー（ページ末尾） ----
         if last_frame_in_page:

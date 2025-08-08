@@ -53,7 +53,7 @@ CIRCLE_NUDGE_X = 8     # 横補正 px（正=右, 負=左）
 CIRCLE_NUDGE_Y = 10    # 縦補正 px（正=下, 負=上）
 
 # --- BOOK位置のpx固定オフセット（プリセットに依存せず同じ見え方狙い）---
-BOOK_BEFORE_PX  = -10   # tgtセルの左へ
+BOOK_BEFORE_PX  = -15   # tgtセルの左へ
 BOOK_BETWEEN_PX = +49.5   # 左セル位置から右へ
 BOOK_AFTER_PX   = +49.5   # tgtセルの右へ
 # プリセット別の微調整（必要時だけ使う）

@@ -47,10 +47,10 @@ BASE_BOOK_OFFSET_KOMA = 3
 HEADER_X_NUDGE_PX      = 10   # 右に10px（負で左）
 HEADER_BOTTOM_NUDGE_PX = -80  # 下端基準から上に80px（負で上）
 
-# ○/●の共通縮小・位置補正（必要に応じて調整）
-CIRCLE_SCALE   = 0.5   # 0.7〜0.9で微調整
-CIRCLE_NUDGE_Y = 10
-CIRCLE_NUDGE_X = 20 # 縦位置の微調整px（正=下, 負=上）※スケール後に適用
+# ○/●/〇 の共通縮小・位置補正（ここ調整でOK）
+CIRCLE_SCALE   = 0.5   # 大きさ（1.0=等倍）
+CIRCLE_NUDGE_X = 10      # 横補正 px（正=右, 負=左）
+CIRCLE_NUDGE_Y = 10      # 縦補正 px（正=下, 負=上）
 
 # フォント
 font_path    = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
@@ -199,14 +199,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
+    # ○/●/〇専用フォント（縮小）
+    font_circle = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * CIRCLE_SCALE))
     label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))  # book
-
-    # ○/● 共通の小さめフォント
-    font_circle = ImageFont.truetype(
-        font_path,
-        size=int(base_font_size * CIRCLE_SCALE * scale_h)
-    )
-
     try:
         cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.6 * scale_h))
     except Exception:
@@ -279,38 +274,39 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 x = x_base if col_block==0 else x_base + column_offset_x
                 y_draw = y + text_offset_y
 
-                # 記号別のベース位置補正
+                # 記号の位置＆フォント
                 if timing in ('●','○','〇'):
-                    x += circle_offset_x; y_draw += circle_offset_y
-                elif timing == '×':
-                    x += cross_offset_x
-                elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
-                    x += alphabet_offset_x
-
-                # ○と●は同フォント・同補正
-                if timing in ('●','○','〇'):
+                    x += circle_offset_x + (CIRCLE_NUDGE_X * scale_w)
+                    y_draw += circle_offset_y + (CIRCLE_NUDGE_Y * scale_h)
                     font = font_circle
-                    y_draw += CIRCLE_NUDGE_Y * scale_h
+                elif timing == '×':
+                    x += BASE_CROSS_OFFSET_X * scale_w
+                    font = font_large
+                elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
+                    x += BASE_ALPHABET_OFFSET_X * scale_w
+                    font = font_large if len(timing) < 3 else font_small
                 else:
-                    font = font_small if len(timing)>=3 else font_large
+                    font = font_small if len(timing) >= 3 else font_large
 
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
 
         # ---- book マーカー（行内共有の重なり回避／枠は飾り）----
         if show_books:
-            # 枠パディング＆線太さ
+            # 枠パディング＆線太さ（ここで定義：以降の計算で使用）
             BOX_PAD_X = 1 * scale_w
             BOX_PAD_Y = 1 * scale_h
             BOX_OUTLINE_W = max(1, int(1.5 * scale_w))
 
             for _, row in df_page.iterrows():
-                idx = (int(row['Frame'])-1) % frames_per_page
+                frame = int(row['Frame'])
+                idx = (frame-1) % frames_per_page
                 col_block = idx // 72
                 row_pos = idx % 72
 
                 row_y_base = first_frame_top_y_true + row_pos*frame_height_true
                 col_x_offset = column_offset_x if col_block==1 else 0
 
+                # その行でbook値が入っている列を位置ごとに集約
                 present = {}
                 for book_col, pos in book_positions.items():
                     cname = norm_str(book_col)
@@ -318,6 +314,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         present.setdefault(pos, []).append(cname)
 
                 placed_boxes_row = []  # 行内で共有（パディング込み矩形）
+
+                # 位置→xを先に出して、x順に処理（安定）
                 entries = []
                 for pos, books_here in present.items():
                     bx = calc_book_x(pos, cell_x_positions_true, koma_width, scale_w)
@@ -329,6 +327,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     base_line_top    = y_ref - 4*scale_h
                     base_line_bottom = y_ref + (frame_height_true*2) + 2*scale_h
 
+                    # 若い番号→上
                     items = []
                     for b in books_here:
                         s = norm_str(b).replace("_","")
@@ -337,9 +336,11 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         items.append((n, s))
                     items.sort(key=lambda t: t[0])
 
-                    line_gap    = 2*scale_h
-                    extra_shift = 3*scale_h
+                    # 調整（控えめ設定）
+                    line_gap    = 2*scale_h       # 基本の縦間隔
+                    extra_shift = 3*scale_h       # 衝突時の追加上げ量
                     margin      = 12*scale_w
+
                     bottom_label_bottom = None
 
                     def overlap(a,b):
@@ -348,10 +349,12 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
                     for idx_item, (_, label) in enumerate(items):
+                        # 基準の理論サイズ
                         bbox0 = draw.textbbox((0, 0), label, font=label_font)
                         lw = bbox0[2] - bbox0[0]
                         lh = bbox0[3] - bbox0[1]
 
+                        # 基準位置（若番ほど上）
                         base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
                         lx_center = book_x - (lw / 2)
                         ly = base_y
@@ -371,15 +374,22 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                                 break
                             ly -= (lh + line_gap + extra_shift)
 
+                        # テキスト描画
                         draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
+                        # 枠（塗りなし）
                         draw.rectangle([cur_padded[0], cur_padded[1], cur_padded[2], cur_padded[3]],
                                        outline=(0,0,0,255), width=BOX_OUTLINE_W)
+
+                        # 当たり判定に追加（枠サイズ）
                         placed_boxes_row.append(cur_padded)
 
+                        # 線の起点（最下段の底）
                         bottom_label_bottom = max(bottom_label_bottom or cur_padded[3], cur_padded[3])
 
+                    # ラベル直下から線（最下段ラベルに追従）
                     pad_top = 2 * scale_h
                     line_top = (bottom_label_bottom + pad_top) if bottom_label_bottom is not None else base_line_top
+                    # 下端は “高さスライダー”に応じて延長
                     extra_len = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
                     line_bottom = max(line_top + 1, base_line_bottom + extra_len)
                     line_w = max(1, int(2*scale_w))
@@ -404,7 +414,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v3.1.2（○・●どちらも小さく）")
+st.title("ちゃいむしーと Web版 v3.2.0｜○/●縮小＆位置補正対応")
 
 # プリセット選択
 selected_preset = st.selectbox("会社プリセット", list(presets.keys()))

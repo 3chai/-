@@ -215,16 +215,24 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
         last_frame_in_page = df_page['Frame'].max()
 
-        # ---- 列見出し（セル名）を左右両カラムの上に《縦書き》で描画 ----
-        header_center_y = first_frame_top_y_true - frame_height_true * max(1, book_offset_koma + 1.0)
+        # ---- 列見出し（セル名）を左右両カラムの上に《縦書き》で描画（固定：数字開始の2コマ上） ----
+        # 数字が始まる最初の行 = first_frame_top_y_true
+        # → そこから 2 コマ上へ固定
+        HEADER_NUDGE_Y = 0 * scale_h  # 微調整したければここを ± に
+        header_center_y = first_frame_top_y_true - 2 * frame_height_true + HEADER_NUDGE_Y
+
+        # 文字間隔（縦の詰め）はスケール連動
         glyph_spacing = 2 * scale_h
-        for side in (0, 1):  # 0:左, 1:右
+
+        for side in (0, 1):  # 0: 左, 1: 右
             x_col = 0 if side == 0 else column_offset_x
             for cell in valid_cells:
                 label = (cell_labels.get(cell) or "").strip()
                 if not label:
                     continue
+                # 数字と同じ“列センター”に合わせる（左右位置は既存の数字と同じ中心）
                 x_center = x_col + cell_x_positions_true[cell]
+
                 draw_vertical_centered(
                     draw,
                     label,
@@ -233,7 +241,6 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     font=cell_label_font,
                     spacing=glyph_spacing
                 )
-
         # ---- 通常セル ----
         for cell in valid_cells:
             x_base = cell_x_positions_true[cell]

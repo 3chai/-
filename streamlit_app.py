@@ -335,6 +335,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     items.sort(key=lambda t: t[0])
 
                     line_gap = 4*scale_h
+                    extra_shift = 2*scale_h 
                     margin   = 12*scale_w
                     bottom_label_bottom = None
 
@@ -357,7 +358,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         cur = (lx, ly, lx+lw, ly+lh)
                         # ← 行内共通の placed_boxes_row で当たり判定！
                         while any(overlap(cur, box) for box in placed_boxes_row):
-                            ly -= (lh + line_gap)
+                            ly -= (lh + line_gap + extra_shift)
                             cur = (lx, ly, lx+lw, ly+lh)
 
                         draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)

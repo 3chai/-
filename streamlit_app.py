@@ -138,7 +138,7 @@ def generate_timesheet(file_bytes, preset):
         koma_width = sum(diffs)/len(diffs) if diffs else 0
 
     # 「between_*」のときの右シフト量（デフォルトは +0.5 コマ）
-    MID_SHIFT_DEFAULT = 0.0
+    MID_SHIFT_DEFAULT = 0.4
     MID_FINE_DEFAULT  = 0.0 * scale_w
     MID_SHIFT_OVERRIDES = {}
     MID_FINE_OVERRIDES  = {}

@@ -45,7 +45,8 @@ HEADER_X_NUDGE_PX = 10   # 右に10px
 HEADER_Y_NUDGE_PX = -80  # 上に80px（マイナスで上）
 
 # フォント
-font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")                 # 既存（数字・記号用）
+jp_font_path = os.path.join(os.path.dirname(__file__), "NotoSansJP-Regular.otf")      # ★追加：日本語対応（セル名用）
 base_font_size = int(12 / (1086 / 3508))
 
 # =============== ユーティリティ ===============
@@ -168,11 +169,16 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
         diffs.sort()
         koma_width = diffs[len(diffs)//2] if diffs else 0.0
 
-    # フォント
+    # フォント（数字・記号）
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
-    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))      # book
-    cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))  # セル名（縦書き）
+    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))      # book
+
+    # セル名（縦書き）は日本語対応フォント（NotoSansJP）。なければ DejaVu にフォールバック
+    try:
+        cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.9 * scale_h))
+    except Exception:
+        cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
 
     # CSV
     df = read_csv_flexibly(file_bytes)
@@ -210,7 +216,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
         last_frame_in_page = df_page['Frame'].max()
 
-        # ---- セル名ヘッダ（1ページ目だけ・縦書き／左カラムのみ）----
+        # ---- セル名ヘッダ（1ページ目だけ・縦書き・左カラムのみ）----
         if page == 0:
             header_center_y = first_frame_top_y_true - 2 * frame_height_true + (HEADER_Y_NUDGE_PX * scale_h)
             glyph_spacing = 2 * scale_h
@@ -221,9 +227,14 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     continue
                 x_center = x_col + cell_x_positions_true[cell] + (HEADER_X_NUDGE_PX * scale_w)
                 draw_vertical_centered(
-                    draw, label, center_x=x_center, center_y=header_center_y,
-                    font=cell_label_font, spacing=glyph_spacing
+                    draw,
+                    label,
+                    center_x=x_center,
+                    center_y=header_center_y,
+                    font=cell_label_font,
+                    spacing=glyph_spacing
                 )
+
         # ---- 通常セル ----
         for cell in valid_cells:
             x_base = cell_x_positions_true[cell]
@@ -360,7 +371,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v2.6.0｜ヘッダ固定（1ページ目のみ）+ book重なり回避")
+st.title("ちゃいむしーと Web版 v2.7.0｜セル名 日本語フォント対応（1ページ目のみ）")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -370,14 +381,14 @@ with c2:
 
 book_offset_koma = st.slider("Bookの高さ（何コマ上）", min_value=0, max_value=12, value=6, step=1)
 
-# セル名（縦書き）の入力だけ残す（1ページ目に描画）
+# セル名（縦書き）の入力（1ページ目だけ描画）
 with st.expander("セル名（A〜H）を入力（縦書き・1ページ目のみ）", expanded=True):
     default_labels = {c: "" for c in CELLS_ALL}
     cols = st.columns(4)
     cell_labels = {}
     for i, cell in enumerate(CELLS_ALL):
         with cols[i % 4]:
-            cell_labels[cell] = st.text_input(f"{cell} セルのラベル", value=default_labels[cell], key=f"label_{cell}")
+            cell_labels[cell] = st.text_input(f"{cell} セルのラベル（日本語OK）", value=default_labels[cell], key=f"label_{cell}")
 
 preset_cfg = presets[selected_preset]
 uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["csv"])

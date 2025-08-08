@@ -153,6 +153,7 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
         if len(parts) == 3:
             _, left, right = parts
             if left in cell_x_positions_true and right in cell_x_positions_true:
+                # 全間で統一：左セル中心 + 0.8コマ + 1px相当
                 book_x = cell_x_positions_true[left] + 0.8 * koma_width + 1 * scale_w
     elif pos.startswith("after_"):
         tgt = pos.replace("after_", "")
@@ -278,6 +279,11 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
         # ---- book マーカー（行内共有の重なり回避／枠は飾り）----
         if show_books:
+            # 枠パディング＆線太さ（ここで定義：以降の計算で使用）
+            BOX_PAD_X = 2 * scale_w
+            BOX_PAD_Y = 2 * scale_h
+            BOX_OUTLINE_W = max(1, int(1.5 * scale_w))
+
             for _, row in df_page.iterrows():
                 frame = int(row['Frame'])
                 idx = (frame-1) % frames_per_page
@@ -294,8 +300,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     if (cname in row.index) and is_filled(row[cname]):
                         present.setdefault(pos, []).append(cname)
 
-                placed_boxes_row = []  # 行内で共有（テキスト矩形のみ）
+                placed_boxes_row = []  # 行内で共有（パディング込み矩形）
 
+                # 位置→xを先に出して、x順に処理（安定）
                 entries = []
                 for pos, books_here in present.items():
                     bx = calc_book_x(pos, cell_x_positions_true, koma_width, scale_w)
@@ -317,14 +324,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     items.sort(key=lambda t: t[0])
 
                     # 調整（控えめ設定）
-                    line_gap    = 3*scale_h       # 階段の基本間隔
-                    extra_shift = 3*scale_h       # ぶつかった時の追加上げ量
+                    line_gap    = 3*scale_h       # 基本の縦間隔
+                    extra_shift = 3*scale_h       # 衝突時の追加上げ量
                     margin      = 12*scale_w
-
-                    # 枠の見た目設定（判定には使わない）
-                    rect_pad_x = 2*scale_w
-                    rect_pad_y = 2*scale_h
-                    rect_w     = max(1, int(1.5*scale_w))
 
                     bottom_label_bottom = None
 
@@ -334,7 +336,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
                     for idx_item, (_, label) in enumerate(items):
-                        # 文字サイズ（理論値）
+                        # 基準の理論サイズ
                         bbox0 = draw.textbbox((0, 0), label, font=label_font)
                         lw = bbox0[2] - bbox0[0]
                         lh = bbox0[3] - bbox0[1]
@@ -345,40 +347,36 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         ly = base_y
                         lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                        # 実際の配置位置で bbox を取り直しながら衝突回避
+                        # 実座標で bbox を取り直して衝突回避（枠パディング込み）
                         while True:
-                            bbox_at = draw.textbbox((lx, ly), label, font=label_font)  # ←実座標での厳密 bbox
-                            # パディング分広げた枠
+                            bbox_at = draw.textbbox((lx, ly), label, font=label_font)
                             cur_padded = (
                                 bbox_at[0] - BOX_PAD_X,
                                 bbox_at[1] - BOX_PAD_Y,
                                 bbox_at[2] + BOX_PAD_X,
                                 bbox_at[3] + BOX_PAD_Y
                             )
-                            # ぶつかっている？
-                            hit = any(not (cur_padded[2] <= bx1 or bx2 <= cur_padded[0] or
-                                           cur_padded[3] <= by1 or by2 <= cur_padded[1])
-                                      for (bx1, by1, bx2, by2) in placed_boxes_row)
+                            hit = any(overlap(cur_padded, box) for box in placed_boxes_row)
                             if not hit:
                                 break
-                            # さらに上にずらして再計算
                             ly -= (lh + line_gap + extra_shift)
 
                         # テキスト描画
-                        draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
+                        draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
                         # 枠（塗りなし）
                         draw.rectangle([cur_padded[0], cur_padded[1], cur_padded[2], cur_padded[3]],
-                                       outline=(0, 0, 0, 255), width=BOX_OUTLINE_W)
+                                       outline=(0,0,0,255), width=BOX_OUTLINE_W)
 
-                        # 当たり判定リストに“枠”を追加
+                        # 当たり判定に追加（枠サイズ）
                         placed_boxes_row.append(cur_padded)
 
-                        # 線の起点用に最下段テキストの“実際の底”で更新
+                        # 線の起点（最下段の底）
                         bottom_label_bottom = max(bottom_label_bottom or cur_padded[3], cur_padded[3])
 
-                    # 線はテキスト底 + 少し下 から
+                    # ラベル直下から線（最下段ラベルに追従）
                     pad_top = 2 * scale_h
                     line_top = (bottom_label_bottom + pad_top) if bottom_label_bottom is not None else base_line_top
+                    # 下端は “高さスライダー”に応じて延長
                     extra_len = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
                     line_bottom = max(line_top + 1, base_line_bottom + extra_len)
                     line_w = max(1, int(2*scale_w))
@@ -403,7 +401,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v3.1.0｜book枠は飾り（テキスト基準で衝突回避）")
+st.title("ちゃいむしーと Web版 v3.1.1｜book枠＆重なり回避（行内共有）＋セル名縦書き")
 
 # プリセット選択
 selected_preset = st.selectbox("会社プリセット", list(presets.keys()))

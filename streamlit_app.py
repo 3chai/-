@@ -37,7 +37,7 @@ BASE_BAR_WIDTH = 1620
 BASE_BAR_SHIFT_X = 88
 text_offset_y = 4
 
-# 旧デフォ（線延長の基準として使用）
+# 旧デフォ（bookラインの基準として使用）
 BASE_BOOK_OFFSET_KOMA = 3
 
 # フォント
@@ -110,6 +110,29 @@ def is_filled(v):
     s = norm_str(v)
     return s not in ("", "nan", "None")
 
+# === 縦書き描画（セル名用） ===
+def draw_vertical_centered(draw, text, center_x, center_y, font, spacing=0):
+    """
+    text を縦書きで、(center_x, center_y) を縦列の中心にして描画する。
+    spacing は各文字間のpx。
+    """
+    if not text:
+        return
+    boxes = []
+    total_h = 0
+    for ch in text:
+        bbox = draw.textbbox((0, 0), ch, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        boxes.append((ch, w, h))
+        total_h += h
+    total_h += spacing * (len(boxes) - 1 if boxes else 0)
+
+    y = center_y - total_h / 2.0
+    for ch, w, h in boxes:
+        draw.text((center_x - w / 2.0, y), ch, fill=(0, 0, 0, 255), font=font)
+        y += h + spacing
+
 # =============== 本体 ===============
 def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, cell_labels=None):
     # プリセット
@@ -153,8 +176,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
-    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))  # book
-    cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))  # セル名（少し大きめ）
+    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))      # book
+    cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))  # セル名（縦書き）
 
     # CSV
     df = read_csv_flexibly(file_bytes)
@@ -192,10 +215,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
         last_frame_in_page = df_page['Frame'].max()
 
-        # ---- 列見出し（セル名）を左右両カラムの上に描画 ----
-        # y位置：表の最上段（first_frame_top）よりさらに上へ。bookの高さとも両立。
-        # だいたい「bookのラベル列よりもう少し上」くらいに置く。
-        header_y = first_frame_top_y_true - frame_height_true * max(1, book_offset_koma + 1.0)
+        # ---- 列見出し（セル名）を左右両カラムの上に《縦書き》で描画 ----
+        header_center_y = first_frame_top_y_true - frame_height_true * max(1, book_offset_koma + 1.0)
+        glyph_spacing = 2 * scale_h
         for side in (0, 1):  # 0:左, 1:右
             x_col = 0 if side == 0 else column_offset_x
             for cell in valid_cells:
@@ -203,11 +225,14 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 if not label:
                     continue
                 x_center = x_col + cell_x_positions_true[cell]
-                # 中央寄せ
-                bbox = draw.textbbox((0, 0), label, font=cell_label_font)
-                tw = bbox[2] - bbox[0]
-                th = bbox[3] - bbox[1]
-                draw.text((x_center - tw/2, header_y - th/2), label, fill=(0,0,0,255), font=cell_label_font)
+                draw_vertical_centered(
+                    draw,
+                    label,
+                    center_x=x_center,
+                    center_y=header_center_y,
+                    font=cell_label_font,
+                    spacing=glyph_spacing
+                )
 
         # ---- 通常セル ----
         for cell in valid_cells:
@@ -256,20 +281,18 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     if pos.startswith("before_"):
                         tgt = pos.replace("before_","")
                         if tgt in cell_x_positions_true:
-                            book_x = cell_x_positions_true[tgt] - 10*scale_w  # Aの前の微調整
+                            book_x = cell_x_positions_true[tgt] - 10*scale_w  # ← Aの前の水平微調整
                     elif pos.startswith("between_"):
                         _, left, right = pos.split("_")
                         if left in cell_x_positions_true and right in cell_x_positions_true:
-                            shift_k = MID_SHIFT_DEFAULT
-                            fine_px = MID_FINE_DEFAULT
-                            shift_k = MID_SHIFT_OVERRIDES.get((left,right), shift_k)
-                            fine_px = MID_FINE_OVERRIDES.get((left,right), fine_px)
+                            shift_k = 0.8
+                            fine_px = -3 * scale_w
                             book_x = cell_x_positions_true[left] + koma_width * shift_k + fine_px
                     elif pos.startswith("after_"):
                         tgt = pos.replace("after_","")
                         if tgt in cell_x_positions_true:
-                            shift_k = AFTER_SHIFT_OVERRIDES.get(tgt, AFTER_SHIFT_DEFAULT)
-                            fine_px = AFTER_FINE_OVERRIDES.get(tgt, AFTER_FINE_DEFAULT)
+                            shift_k = 0.8
+                            fine_px = -3 * scale_w
                             book_x  = cell_x_positions_true[tgt] + koma_width * shift_k + fine_px
                     if book_x is None:
                         continue
@@ -291,7 +314,6 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
                     line_gap = 2*scale_h
                     margin   = 12*scale_w
-
                     bottom_label_bottom = None
 
                     for idx_item, (_, label) in enumerate(items):
@@ -331,7 +353,6 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     # 下端は「基準 + (増やしたコマ数ぶん)」
                     extra_len_by_koma = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
                     line_bottom = base_line_bottom + extra_len_by_koma
-
                     if line_bottom < line_top:
                         line_bottom = line_top + 1
 
@@ -356,7 +377,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v2.3.0｜セル名(キャラ名)ヘッダ描画つき")
+st.title("ちゃいむしーと Web版 v2.4.0｜セル名 縦書きヘッダ + Book表示ON/OFF")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -364,17 +385,17 @@ with c1:
 with c2:
     show_books = st.checkbox("Bookマーカーを描画する", value=True)
 
-# 高さスライダーのみ（book）
+# Book高さ（何コマ上）
 book_offset_koma = st.slider("Bookの高さ（何コマ上）", min_value=0, max_value=12, value=6, step=1)
 
-# セル名入力UI
-with st.expander("セル名（A〜H）の入力（空欄は描画なし）", expanded=True):
+# セル名入力UI（縦書きで描画）
+with st.expander("セル名（A〜H）を入力（空欄は描画なし）", expanded=True):
     default_labels = {c: "" for c in CELLS_ALL}
     cols = st.columns(4)
     cell_labels = {}
     for i, cell in enumerate(CELLS_ALL):
         with cols[i % 4]:
-            cell_labels[cell] = st.text_input(f"{cell} セルのラベル", value=default_labels[cell], key=f"label_{cell}")
+            cell_labels[cell] = st.text_input(f"{cell} セルのラベル（縦書き）", value=default_labels[cell], key=f"label_{cell}")
 
 preset_cfg = presets[selected_preset]
 uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["csv"])

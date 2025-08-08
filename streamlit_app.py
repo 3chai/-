@@ -37,6 +37,9 @@ BASE_BAR_WIDTH = 1620
 BASE_BAR_SHIFT_X = 88
 text_offset_y = 4
 
+# book ラベルの縦オフセット（何コマ上に置くか）
+BOOK_OFFSET_KOMA = 6  # ← ここを変えれば 3→6→… に一括変更できる
+
 # フォント
 font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
 base_font_size = int(12 / (1086 / 3508))  # 既存の基準
@@ -133,21 +136,22 @@ def generate_timesheet(file_bytes, preset):
     try:
         koma_width = cell_x_positions_true['B'] - cell_x_positions_true['A']
     except Exception:
-        xs = [cell_x_positions_true[c] for c in sorted(cell_x_positions_true.keys())]
-        diffs = [xs[i+1] - xs[i] for i in range(len(xs)-1)]
-        koma_width = (sum(diffs)/len(diffs)) if diffs else 0
+        # 座標値でソートして中央値差を採用（外れ値に強い）
+        items = sorted(cell_x_positions_true.items(), key=lambda kv: kv[1])
+        coords = [v for _, v in items]
+        diffs = [coords[i+1] - coords[i] for i in range(len(coords)-1)]
+        diffs.sort()
+        koma_width = diffs[len(diffs)//2] if diffs else 0.0
 
     # 「between_*」の押し出し：左セル中心 + koma_width * SHIFT + px微調整
-    MID_SHIFT_DEFAULT = 0.8       # 0.5コマ右へ
+    MID_SHIFT_DEFAULT = 0.8           # 0.5〜0.9 で好み調整OK
     MID_FINE_DEFAULT  = -3 * scale_w  # px微調整（共通）
-    MID_SHIFT_OVERRIDES = {}      # ← 特別補正は今は無し
+    MID_SHIFT_OVERRIDES = {}          # 特別補正は今は無し
     MID_FINE_OVERRIDES  = {}
 
-    
-    # ★ after_* 用（新規）
-    AFTER_SHIFT_DEFAULT = 0.8      # 例: Bの“後”は B から 1コマ右
+    # after_* 用（Bの後など）
+    AFTER_SHIFT_DEFAULT = 0.8
     AFTER_FINE_DEFAULT  = -3 * scale_w
-    # 必要なら個別上書き: 例 {"B": 0.9}
     AFTER_SHIFT_OVERRIDES = {}
     AFTER_FINE_OVERRIDES  = {}
 
@@ -212,7 +216,7 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small if len(timing)>=3 else font_large
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
 
-        # ---- book マーカー（3コマ上／複数は若い番号ほど上・線は最下段ラベル直下から）----
+        # ---- book マーカー（BOOK_OFFSET_KOMA コマ上／複数は若い番号ほど上・線は最下段ラベル直下から）----
         for _, row in df_page.iterrows():
             frame = int(row['Frame'])
             idx = (frame-1) % frames_per_page
@@ -231,7 +235,7 @@ def generate_timesheet(file_bytes, preset):
 
             placed_boxes = []  # ラベルの当たり判定（行内）
             for pos, books_here in present.items():
-                # 座標計算（Aの前=そのまま、間=左セル + koma*shift）
+                # 座標計算（Aの前=そのまま、間=左セル + koma*shift、後=セル + koma*shift）
                 book_x = None
                 if pos.startswith("before_"):
                     tgt = pos.replace("before_","")
@@ -244,17 +248,16 @@ def generate_timesheet(file_bytes, preset):
                         fine_px = MID_FINE_OVERRIDES.get((left,right), MID_FINE_DEFAULT)
                         book_x = cell_x_positions_true[left] + koma_width * shift_k + fine_px
                 elif pos.startswith("after_"):
-                    tgt = pos.replace("after_", "")
+                    tgt = pos.replace("after_","")
                     if tgt in cell_x_positions_true:
                         shift_k = AFTER_SHIFT_OVERRIDES.get(tgt, AFTER_SHIFT_DEFAULT)
                         fine_px = AFTER_FINE_OVERRIDES.get(tgt, AFTER_FINE_DEFAULT)
                         book_x  = cell_x_positions_true[tgt] + koma_width * shift_k + fine_px
-                        
                 if book_x is None:
                     continue
 
                 book_x = book_x + col_x_offset - 5  # ページ右カラム補正＋少し左
-                y_ref = row_y_base - (frame_height_true * 3)  # 3コマ上
+                y_ref = row_y_base - (frame_height_true * BOOK_OFFSET_KOMA)  # ← 6コマ上
 
                 base_line_top    = y_ref - 4*scale_h
                 base_line_bottom = y_ref + (frame_height_true*2) + 2*scale_h
@@ -334,7 +337,7 @@ def generate_timesheet(file_bytes, preset):
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v1.9.8｜between=左セル+コマ幅×係数（全間共通）")
+st.title("ちゃいむしーと Web版 v1.9.9｜bookラベル=6コマ上・線は最下段ラベル基準")
 selected_preset = st.selectbox("会社プリセットを選択", list(presets.keys()))
 preset_cfg = presets[selected_preset]
 

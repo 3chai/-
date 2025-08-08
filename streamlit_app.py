@@ -126,11 +126,11 @@ def generate_timesheet(file_bytes, preset):
     scale_h = frame_height_true / BASE_FRAME_HEIGHT
     scale_w = true_width / BASE_WIDTH
 
-    # between の補正ノブ（←ここを触れば微調整できる）
-    MID_SHIFT_DEFAULT = 0.5          # “間”の中央から 0.5 コマ右へ
-    MID_FINE_DEFAULT  = -3 * scale_w  # 追加px（左へ3px）
-    MID_SHIFT_OVERRIDES = {("B","C"): 0.35, ("C","D"): 0.35}   # B–C/C–D専用
-    MID_FINE_OVERRIDES  = {("B","C"): -4 * scale_w, ("C","D"): -4 * scale_w}
+    # between の補正ノブ（全部の「間」を中央から“ちょうど1コマ右”へ）
+    MID_SHIFT_DEFAULT = 1.0        # 1.0コマ
+    MID_FINE_DEFAULT  = 0          # 追加pxなし（微調整したい時は ±(2〜6)*scale_w など）
+    MID_SHIFT_OVERRIDES = {}       # 個別上書きなし
+    MID_FINE_OVERRIDES  = {}
 
     # 1コマ幅（AとBの差）を推定
     try:
@@ -210,7 +210,7 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small if len(timing) >= 3 else font_large
                 draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-        # ---- bookマーカー描画（3コマ上・重なり回避・縦線上に延長） ----
+        # ---- bookマーカー描画（3コマ上・重なり回避・縦線上に延長／betweenは+1コマ右） ----
         for _, row in df_page.iterrows():
             frame = int(row['Frame'])
             idx = (frame - 1) % frames_per_page
@@ -243,11 +243,8 @@ def generate_timesheet(file_bytes, preset):
                             mid = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
                             shift_koma = MID_SHIFT_DEFAULT
                             fine_px    = MID_FINE_DEFAULT
-                            key = (left, right)
-                            if key in MID_SHIFT_OVERRIDES:
-                                shift_koma = MID_SHIFT_OVERRIDES[key]
-                            if key in MID_FINE_OVERRIDES:
-                                fine_px = MID_FINE_OVERRIDES[key]
+                            shift_koma = MID_SHIFT_OVERRIDES.get((left, right), shift_koma)
+                            fine_px    = MID_FINE_OVERRIDES.get((left, right), fine_px)
                             book_x = mid + shift_koma * koma_width + fine_px
                 elif pos.startswith("after_"):
                     tgt = pos.replace("after_", "")
@@ -333,7 +330,7 @@ def generate_timesheet(file_bytes, preset):
     return result_images, max_frame
 
 # =============== Streamlit UI ===============
-st.title("ちゃいむしーと Web版 v1.9.7｜bookマーカー between 補正つき")
+st.title("ちゃいむしーと Web版 v1.9.8｜bookマーカー “全部の間=+1コマ右” 統一")
 selected_preset = st.selectbox("会社プリセットを選択", list(presets.keys()))
 preset_cfg = presets[selected_preset]
 

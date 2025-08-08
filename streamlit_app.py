@@ -154,9 +154,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
     book_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))
     try:
-        cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.9 * scale_h))
+        cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.7 * scale_h))
     except Exception:
-        cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
+        cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.7 * scale_h))
 
     # CSV
     df = read_csv_flexibly(file_bytes)

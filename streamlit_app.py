@@ -145,7 +145,7 @@ def generate_timesheet(file_bytes, preset):
 
     
     # ★ after_* 用（新規）
-    AFTER_SHIFT_DEFAULT = 1.0      # 例: Bの“後”は B から 1コマ右
+    AFTER_SHIFT_DEFAULT = 0.8      # 例: Bの“後”は B から 1コマ右
     AFTER_FINE_DEFAULT  = -3 * scale_w
     # 必要なら個別上書き: 例 {"B": 0.9}
     AFTER_SHIFT_OVERRIDES = {}

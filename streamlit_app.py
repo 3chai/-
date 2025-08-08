@@ -37,7 +37,7 @@ BASE_BAR_WIDTH = 1620
 BASE_BAR_SHIFT_X = 88
 text_offset_y = 4
 
-# 旧デフォ参照用（線の延長計算で使う）
+# 旧デフォ（線延長の基準として使用）
 BASE_BOOK_OFFSET_KOMA = 3
 
 # フォント
@@ -111,7 +111,7 @@ def is_filled(v):
     return s not in ("", "nan", "None")
 
 # =============== 本体 ===============
-def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, line_extend_px=0):
+def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6):
     # プリセット
     true_width = preset["true_width"]
     true_height = preset["true_height"]
@@ -211,7 +211,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 font = font_small if len(timing)>=3 else font_large
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
 
-        # ---- book マーカー（可変：book_offset_koma ／ 追加延長：line_extend_px）----
+        # ---- book マーカー（高さ=book_offset_koma・線は自動延長）----
         if show_books:
             for _, row in df_page.iterrows():
                 frame = int(row['Frame'])
@@ -222,6 +222,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 row_y_base = first_frame_top_y_true + row_pos*frame_height_true
                 col_x_offset = column_offset_x if col_block==1 else 0
 
+                # この行でbook値が入っている列を位置ごとに
                 present = {}
                 for book_col, pos in book_positions.items():
                     cname = norm_str(book_col)
@@ -230,16 +231,19 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
 
                 placed_boxes = []
                 for pos, books_here in present.items():
+                    # X座標（Aの前／間／後）
                     book_x = None
                     if pos.startswith("before_"):
                         tgt = pos.replace("before_","")
                         if tgt in cell_x_positions_true:
-                            book_x = cell_x_positions_true[tgt] - 10*scale_w
+                            book_x = cell_x_positions_true[tgt] - 10*scale_w  # ← Aの前の水平微調整
                     elif pos.startswith("between_"):
                         _, left, right = pos.split("_")
                         if left in cell_x_positions_true and right in cell_x_positions_true:
-                            shift_k = MID_SHIFT_OVERRIDES.get((left,right), MID_SHIFT_DEFAULT)
-                            fine_px = MID_FINE_OVERRIDES.get((left,right), MID_FINE_DEFAULT)
+                            shift_k = MID_SHIFT_DEFAULT
+                            fine_px = MID_FINE_DEFAULT
+                            shift_k = MID_SHIFT_OVERRIDES.get((left,right), shift_k)
+                            fine_px = MID_FINE_OVERRIDES.get((left,right), fine_px)
                             book_x = cell_x_positions_true[left] + koma_width * shift_k + fine_px
                     elif pos.startswith("after_"):
                         tgt = pos.replace("after_","")
@@ -256,6 +260,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     base_line_top    = y_ref - 4*scale_h
                     base_line_bottom = y_ref + (frame_height_true*2) + 2*scale_h
 
+                    # ラベル順（若い番号→上）
                     items = []
                     for b in books_here:
                         s = norm_str(b).replace("_","")
@@ -303,9 +308,9 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     else:
                         line_top = base_line_top
 
-                    # 下端は「基準 + (増やしたコマ数ぶん) + 任意px延長」
+                    # 下端は「基準 + (増やしたコマ数ぶん)」
                     extra_len_by_koma = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
-                    line_bottom = base_line_bottom + extra_len_by_koma + line_extend_px
+                    line_bottom = base_line_bottom + extra_len_by_koma
 
                     if line_bottom < line_top:
                         line_bottom = line_top + 1
@@ -331,19 +336,16 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v2.1.0｜book高さ&線延長スライダー付き")
+st.title("ちゃいむしーと Web版 v2.2.0｜Book高さスライダーのみ")
 
-col1, col2, col3 = st.columns(3)
-with col1:
+c1, c2 = st.columns(2)
+with c1:
     selected_preset = st.selectbox("会社プリセット", list(presets.keys()))
-with col2:
+with c2:
     show_books = st.checkbox("Bookマーカーを描画する", value=True)
-with col3:
-    pass
 
-# 新UI：調整スライダー
+# 高さスライダーのみ
 book_offset_koma = st.slider("Bookの高さ（何コマ上）", min_value=0, max_value=12, value=6, step=1)
-line_extend_px   = st.slider("縦線の追加延長（px）", min_value=0, max_value=400, value=0, step=1)
 
 preset_cfg = presets[selected_preset]
 uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["csv"])
@@ -354,8 +356,7 @@ if uploaded_file is not None:
             uploaded_file.read(),
             preset_cfg,
             show_books=show_books,
-            book_offset_koma=book_offset_koma,
-            line_extend_px=line_extend_px
+            book_offset_koma=book_offset_koma
         )
         if not pages:
             st.warning("有効なFrameデータが見つかりませんでした。")

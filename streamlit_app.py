@@ -146,24 +146,31 @@ def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
         draw.text((bottom_x - w/2.0, y), ch, fill=(0,0,0,255), font=font)
         y += h + spacing
 
-# book X座標（before/between/after）
+# book X座標（before/between/after）— すべてコマ割合で
 def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
+    BETWEEN_FRAC = 0.80   # left から 0.80 コマ右
+    AFTER_FRAC   = 0.80   # tgt から 0.80 コマ右
+    BEFORE_FRAC  = 0.80   # tgt から 0.20 コマ左（←ここ触れば効く）
+    FINE_FRAC    = 0.00   # 微調整: コマの何割か（例 0.02）
+
     book_x = None
     if pos.startswith("before_"):
         tgt = pos.replace("before_", "")
         if tgt in cell_x_positions_true:
-            book_x = cell_x_positions_true[tgt] - 8 * scale_w
+            book_x = cell_x_positions_true[tgt] - (BEFORE_FRAC + FINE_FRAC) * koma_width
+
     elif pos.startswith("between_"):
         parts = pos.split("_")
         if len(parts) == 3:
             _, left, right = parts
             if left in cell_x_positions_true and right in cell_x_positions_true:
-                # 全間で統一：左セル中心 + 0.8コマ + 3px相当
-                book_x = cell_x_positions_true[left] + 0.8 * koma_width + 0 * scale_w
+                book_x = cell_x_positions_true[left] + (BETWEEN_FRAC + FINE_FRAC) * koma_width
+
     elif pos.startswith("after_"):
         tgt = pos.replace("after_", "")
         if tgt in cell_x_positions_true:
-            book_x = cell_x_positions_true[tgt] + 0.8 * koma_width + 0 * scale_w
+            book_x = cell_x_positions_true[tgt] + (AFTER_FRAC + FINE_FRAC) * koma_width
+
     return book_x
 
 # =============== 本体 ===============

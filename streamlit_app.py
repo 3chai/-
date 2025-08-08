@@ -207,7 +207,7 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small if len(timing) >= 3 else font_large
                 draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-        # ---- bookマーカー描画（縦線＋番号ラベル／複数は「book2-book3」結合）[3コマ上げ版] ----
+        # ---- bookマーカー描画（縦線＋番号ラベル／複数は「book1-book2」結合）[3コマ上げ版] ----
         for _, row in df_page.iterrows():
             frame = int(row['Frame'])
             idx = (frame - 1) % frames_per_page
@@ -218,26 +218,13 @@ def generate_timesheet(file_bytes, preset):
             y_base = first_frame_top_y_true + row_pos * frame_height_true
             x_col  = column_offset_x if col_block == 1 else 0
 
-            # この行でbook値が入っているものだけ抽出し、位置ごとにグループ化
-            # present 作成（列名・値とも正規化して判定）
+            # この行でbook値が入っているものだけ抽出し、位置ごとにグルーピング
             present = {}
             for book_col, pos in book_positions.items():
-                col = norm_str(book_col)          # 列名を正規化（'_book1' でも 'book1' でも拾う）
-                if col in row and is_filled(row[col]):
+                col = norm_str(book_col)  # 列名正規化（'_book1' でも 'book1' でもOK）
+                if (col in row.index) and is_filled(row[col]):
                     present.setdefault(pos, []).append(col)
 
-            # ラベル：単独 or 複数は「book2-book3」形式（番号は昇順）
-            if len(books_here) == 1:
-                label = norm_str(books_here[0]).replace("_", "")          # "_book1" -> "book1"
-            else:
-                nums = []
-                for b in books_here:
-                    s = norm_str(b).replace("_", "")                      # "book2"
-                    m = re.search(r"(\d+)$", s)
-                    n = int(m.group(1)) if m else 0
-                    nums.append((n, s))
-                nums.sort(key=lambda t: t[0])                              # 昇順
-                label = "-".join(s for _, s in nums)
             # 位置ごとに描画
             for pos, books_here in present.items():
                 # 基準x座標の計算
@@ -259,7 +246,7 @@ def generate_timesheet(file_bytes, preset):
                 if x_insert is None:
                     continue
 
-                # 左に5px、上に3コマ分ずらす
+                # 左に5px、上に3コマ分ずらす（縦線も同様）
                 x_insert = x_insert + x_col - 5
                 y_ref = y_base - (frame_height_true * 3)
 
@@ -269,34 +256,32 @@ def generate_timesheet(file_bytes, preset):
                 line_w = max(1, int(2 * scale_w))
                 draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
-                # ラベル：単独 or 複数は「book2-book3」形式（番号は昇順）
+                # ラベル生成：単独 or 複数は「book1-book2」結合（番号は昇順）
                 if len(books_here) == 1:
-                    label = books_here[0].replace("_", "")
+                    label = norm_str(books_here[0]).replace("_", "")          # "_book1" -> "book1"
                 else:
                     nums = []
                     for b in books_here:
-                        s = b.replace("_", "")        # "book2"
-                        m = re.search(r'(\d+)$', s)
+                        s = norm_str(b).replace("_", "")                      # "book2"
+                        m = re.search(r"(\d+)$", s)
                         n = int(m.group(1)) if m else 0
                         nums.append((n, s))
-                    nums.sort(key=lambda t: t[0])     # 昇順。降順にしたいなら reverse=True
+                    nums.sort(key=lambda t: t[0])                              # 昇順
                     label = "-".join(s for _, s in nums)
 
-                # ---- ラベルを縦線の上に描画（縦線は動かさない） ----
+                # ラベルを縦線の上に描画（縦線は動かさない／ラベルだけ端でクランプ）
                 bbox = draw.textbbox((0, 0), label, font=label_font)
                 label_w = bbox[2] - bbox[0]
                 label_h = bbox[3] - bbox[1]
 
-                # 本来の中央配置（縦線にセンタリング）
                 label_x_center = x_insert - (label_w / 2)
                 label_y = line_top - label_h - 2 * scale_h
 
-                # 端で切れないように「ラベルだけ」クランプ（縦線は動かさない）
-                margin = 12 * scale_w  # 余白（お好みで 8〜16 * scale_w 等に）
+                margin = 12 * scale_w
                 min_x = margin
                 max_x = true_width - margin - label_w
                 label_x = max(min_x, min(max_x, label_x_center))
-                
+
                 draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
                 
         # ---- 黒バー（ページ末尾） ----

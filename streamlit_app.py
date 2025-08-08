@@ -267,7 +267,6 @@ for _, row in df_page.iterrows():
         label_y = line_top - label_h - 2 * scale_h
         draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
 
-        
         # ---- 黒バー（ページ末尾） ----
         if last_frame_in_page:
             idx_last = (last_frame_in_page - 1) % frames_per_page

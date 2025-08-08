@@ -81,7 +81,6 @@ def preprocess_cells(df_raw, valid_cells):
 def get_book_positions(df, valid_cells):
     """_book列の列順から、挿入位置（before_/between_/after_）を決める。"""
     cols = list(df.columns)
-    # _book1 / book1 の両方を許容
     book_cols = [c for c in cols if re.match(r"^_?book\d+$", str(c), re.IGNORECASE)]
     positions = {}
     for b in book_cols:
@@ -108,7 +107,6 @@ def get_book_positions(df, valid_cells):
     return positions
 
 def norm_str(s: object) -> str:
-    # 全角→半角、全角スペース→半角、前後スペース除去
     return unicodedata.normalize("NFKC", str(s)).replace("\u3000", " ").strip()
 
 def is_filled(v: object) -> bool:
@@ -125,14 +123,14 @@ def generate_timesheet(file_bytes, preset):
     column_offset_x = preset["column_offset_x"]
     cell_x_positions_true = preset["cell_x_positions_true"]
 
-    # ←← ここに追加（AとBの“中央座標”から1コマ幅を推定）
+    # 1コマ幅（AとBの差）を推定
     try:
         koma_width = cell_x_positions_true['B'] - cell_x_positions_true['A']
     except Exception:
         xs = [cell_x_positions_true[c] for c in sorted(cell_x_positions_true.keys())]
         diffs = [xs[i+1] - xs[i] for i in range(len(xs) - 1)]
         koma_width = sum(diffs) / len(diffs) if diffs else 0
-        
+
     # スケール
     scale_h = frame_height_true / BASE_FRAME_HEIGHT
     scale_w = true_width / BASE_WIDTH
@@ -147,7 +145,7 @@ def generate_timesheet(file_bytes, preset):
     # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
-    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))
+    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))  # book少し小さめ
 
     # CSV
     df = read_csv_flexibly(file_bytes)
@@ -210,120 +208,119 @@ def generate_timesheet(file_bytes, preset):
                 font = font_small if len(timing) >= 3 else font_large
                 draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-       # ---- bookマーカー描画（通常セルに影響しない安全版） ----
-       for _, row in df_page.iterrows():
-           frame = int(row['Frame'])
-           idx = (frame - 1) % frames_per_page
-           col_block = idx // 72                 # 0=左, 1=右
-           row_pos = idx % 72
+        # ---- bookマーカー描画（通常セルに影響しない安全版） ----
+        for _, row in df_page.iterrows():
+            frame = int(row['Frame'])
+            idx = (frame - 1) % frames_per_page
+            col_block = idx // 72                 # 0=左, 1=右
+            row_pos = idx % 72
 
-           # 行の基準位置（このフレームの行）
-           row_y_base = first_frame_top_y_true + row_pos * frame_height_true
-           col_x_offset = column_offset_x if col_block == 1 else 0
+            # 行の基準位置（このフレームの行）
+            row_y_base = first_frame_top_y_true + row_pos * frame_height_true
+            col_x_offset = column_offset_x if col_block == 1 else 0
 
-           # この行でbook値が入っているものだけ抽出（位置ごと）
-           present = {}
-           for book_col, pos in book_positions.items():
-               cname = norm_str(book_col)  # "_book2" でも "book2" でもOK
-               if (cname in row.index) and is_filled(row[cname]):
-                   present.setdefault(pos, []).append(cname)
+            # この行でbook値が入っているものだけ抽出（位置ごと）
+            present = {}
+            for book_col, pos in book_positions.items():
+                cname = norm_str(book_col)  # "_book2" でも "book2" でもOK
+                if (cname in row.index) and is_filled(row[cname]):
+                    present.setdefault(pos, []).append(cname)
 
-           # 1コマ幅（AとBの差）…関数冒頭で定義済みの koma_width を使用
-           # ※ まだ入れてなければ generate_timesheet() 冒頭で A/B から算出してね
+            # 既に置いたラベルの当たり判定（この行だけ）
+            placed_boxes = []
 
-           # 既に置いたラベルの当たり判定（この行だけ）
-           placed_boxes = []
+            for pos, books_here in present.items():
+                # ---- book専用の座標（他と混ざらない）----
+                book_x = None
+                if pos.startswith("before_"):
+                    tgt = pos.replace("before_", "")
+                    if tgt in cell_x_positions_true:
+                        book_x = cell_x_positions_true[tgt] - 10 * scale_w
+                    # before_* はシフトしない（Aの前はそのまま）
+                elif pos.startswith("between_"):
+                    parts = pos.split("_")
+                    if len(parts) == 3:
+                        _, left, right = parts
+                        if left in cell_x_positions_true and right in cell_x_positions_true:
+                            # まずは純粋な“間”（中央）
+                            book_x = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
+                            # 「〜の間」は 1コマ分だけ右へ
+                            book_x += koma_width
+                elif pos.startswith("after_"):
+                    tgt = pos.replace("after_", "")
+                    if tgt in cell_x_positions_true:
+                        book_x = cell_x_positions_true[tgt] + 10 * scale_w
+                if book_x is None:
+                    continue
 
-           for pos, books_here in present.items():
-               # ---- book専用の座標変数（他の描画と混ざらないよう別名）----
-               book_x = None
-               if pos.startswith("before_"):
-                   tgt = pos.replace("before_", "")
-                   if tgt in cell_x_positions_true:
-                       book_x = cell_x_positions_true[tgt] - 10 * scale_w
-                   # before_* はシフトしない（Aの前はそのまま）
-               elif pos.startswith("between_"):
-                   parts = pos.split("_")
-                   if len(parts) == 3:
-                       _, left, right = parts
-                       if left in cell_x_positions_true and right in cell_x_positions_true:
-                          book_x = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
-                           # 「〜の間」は 1コマ分だけ右へ
-                           book_x += koma_width
-               elif pos.startswith("after_"):
-                   tgt = pos.replace("after_", "")
-                   if tgt in cell_x_positions_true:
-                       book_x = cell_x_positions_true[tgt] + 10 * scale_w
-               if book_x is None:
-                   continue
+                # ページ右カラムならカラムオフセット、さらに左に5px
+                book_x = book_x + col_x_offset - 5
+                # 3コマ分上に配置する基準
+                y_ref = row_y_base - (frame_height_true * 3)
 
-               # ページ右カラムならカラムオフセット、さらに左に5px
-               book_x = book_x + col_x_offset - 5
-               # 3コマ分上に配置する基準
-               y_ref = row_y_base - (frame_height_true * 3)
+                # 縦線の“元の”長さ（後で上に延長する）
+                base_line_top    = y_ref - 4 * scale_h
+                base_line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
 
-               # 縦線の“元の”長さ（後で上に延長する）
-               base_line_top    = y_ref - 4 * scale_h
-               base_line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
+                # 若い番号ほど上に縦並び
+                items = []
+                for b in books_here:
+                    s = norm_str(b).replace("_", "")   # "book2"
+                    m = re.search(r"(\d+)$", s)
+                    n = int(m.group(1)) if m else 0
+                    items.append((n, s))
+                items.sort(key=lambda t: t[0])  # book1, book2, …
 
-               # 若い番号ほど上に縦並び
-               items = []
-               for b in books_here:
-                   s = norm_str(b).replace("_", "")   # "book2"
-                   m = re.search(r"(\d+)$", s)
-                   n = int(m.group(1)) if m else 0
-                   items.append((n, s))
-               items.sort(key=lambda t: t[0])  # book1, book2, …
+                line_gap = 2 * scale_h
+                margin   = 12 * scale_w
 
-               line_gap = 2 * scale_h
-               margin   = 12 * scale_w
+                # この位置で一番上に来たラベルのy
+                min_label_y = None
 
-               # この位置で一番上に来たラベルのy
-               min_label_y = None
+                # ラベルを上から順に置く
+                for idx_item, (_, label) in enumerate(items):
+                    # サイズ
+                    bbox = draw.textbbox((0, 0), label, font=label_font)
+                    lw = bbox[2] - bbox[0]
+                    lh = bbox[3] - bbox[1]
 
-               # ラベルを上から順に置く
-               for idx_item, (_, label) in enumerate(items):
-                   # サイズ
-                   bbox = draw.textbbox((0, 0), label, font=label_font)
-                   lw = bbox[2] - bbox[0]
-                   lh = bbox[3] - bbox[1]
+                    # book1が最上段、その下にbook2…（基準は縦線上端の少し上）
+                    base_y = (base_line_top - lh - 2 * scale_h) - idx_item * (lh + line_gap)
 
-                   # book1が最上段、その下にbook2…（基準は縦線上端の少し上）
-                   base_y = (base_line_top - lh - 2 * scale_h) - idx_item * (lh + line_gap)
+                    # 縦線中心で水平センター
+                    lx_center = book_x - (lw / 2)
+                    ly = base_y
 
-                   # 縦線中心で水平センター
-                   lx_center = book_x - (lw / 2)
-                   ly = base_y
+                    # 左右端クランプ（縦線は動かさない）
+                    lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                   # 左右端クランプ（縦線は動かさない）
-                   lx = max(margin, min(true_width - margin - lw, lx_center))
+                    # 別位置ラベルと当たったらさらに上へ
+                    def overlap(a, b):
+                        ax1, ay1, ax2, ay2 = a
+                        bx1, by1, bx2, by2 = b
+                        return not (ax2 <= bx1 or bx2 <= ax1 or ay2 <= by1 or by2 <= ay1)
 
-                   # 別位置ラベルと当たったらさらに上へ
-                   def overlap(a, b):
-                       ax1, ay1, ax2, ay2 = a
-                       bx1, by1, bx2, by2 = b
-                       return not (ax2 <= bx1 or bx2 <= ax1 or ay2 <= by1 or by2 <= ay1)
-                   cur = (lx, ly, lx + lw, ly + lh)
-                   while any(overlap(cur, box) for box in placed_boxes):
-                       ly -= (lh + line_gap)
-                       cur = (lx, ly, lx + lw, ly + lh)
+                    cur = (lx, ly, lx + lw, ly + lh)
+                    while any(overlap(cur, box) for box in placed_boxes):
+                        ly -= (lh + line_gap)
+                        cur = (lx, ly, lx + lw, ly + lh)
 
-                   # ラベル描画＆登録
-                   draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
-                  placed_boxes.append(cur)
+                    # ラベル描画＆登録
+                    draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
+                    placed_boxes.append(cur)
 
-                   if (min_label_y is None) or (ly < min_label_y):
-                       min_label_y = ly
+                    if (min_label_y is None) or (ly < min_label_y):
+                        min_label_y = ly
 
-               # ---- ラベルを置いた“後”で縦線を描画（上に延長）----
-               line_top    = base_line_top
-               line_bottom = base_line_bottom
-               if min_label_y is not None and min_label_y - 2 * scale_h < line_top:
-                   line_top = min_label_y - 2 * scale_h
+                # ---- ラベルを置いた“後”で縦線を描画（上に延長）----
+                line_top    = base_line_top
+                line_bottom = base_line_bottom
+                if min_label_y is not None and (min_label_y - 2 * scale_h) < line_top:
+                    line_top = min_label_y - 2 * scale_h
 
-               line_w = max(1, int(2 * scale_w))
-               draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
-        
+                line_w = max(1, int(2 * scale_w))
+                draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
+
         # ---- 黒バー（ページ末尾） ----
         if last_frame_in_page:
             idx_last = (last_frame_in_page - 1) % frames_per_page

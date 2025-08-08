@@ -143,6 +143,14 @@ def generate_timesheet(file_bytes, preset):
     MID_SHIFT_OVERRIDES = {}      # ← 特別補正は今は無し
     MID_FINE_OVERRIDES  = {}
 
+    
+    # ★ after_* 用（新規）
+    AFTER_SHIFT_DEFAULT = 1.0      # 例: Bの“後”は B から 1コマ右
+    AFTER_FINE_DEFAULT  = -3 * scale_w
+    # 必要なら個別上書き: 例 {"B": 0.9}
+    AFTER_SHIFT_OVERRIDES = {}
+    AFTER_FINE_OVERRIDES  = {}
+
     # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
@@ -236,9 +244,12 @@ def generate_timesheet(file_bytes, preset):
                         fine_px = MID_FINE_OVERRIDES.get((left,right), MID_FINE_DEFAULT)
                         book_x = cell_x_positions_true[left] + koma_width * shift_k + fine_px
                 elif pos.startswith("after_"):
-                    tgt = pos.replace("after_","")
+                    tgt = pos.replace("after_", "")
                     if tgt in cell_x_positions_true:
-                        book_x = cell_x_positions_true[tgt] + 10*scale_w
+                        shift_k = AFTER_SHIFT_OVERRIDES.get(tgt, AFTER_SHIFT_DEFAULT)
+                        fine_px = AFTER_FINE_OVERRIDES.get(tgt, AFTER_FINE_DEFAULT)
+                        book_x  = cell_x_positions_true[tgt] + koma_width * shift_k + fine_px
+                        
                 if book_x is None:
                     continue
 

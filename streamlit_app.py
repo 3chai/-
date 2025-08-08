@@ -54,8 +54,8 @@ CIRCLE_NUDGE_Y = 10    # 縦補正 px（正=下, 負=上）
 
 # --- BOOK位置のpx固定オフセット（プリセットに依存せず同じ見え方狙い）---
 BOOK_BEFORE_PX  = -15   # tgtセルの左へ
-BOOK_BETWEEN_PX = +47   # 左セル位置から右へ
-BOOK_AFTER_PX   = +47   # tgtセルの右へ
+BOOK_BETWEEN_PX = +46   # 左セル位置から右へ
+BOOK_AFTER_PX   = +46   # tgtセルの右へ
 # プリセット別の微調整（必要時だけ使う）
 BOOK_PRESET_FINE = {
     # "Andraft": 0,

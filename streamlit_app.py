@@ -334,37 +334,47 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
                     for idx_item, (_, label) in enumerate(items):
-                        # テキストサイズ
-                        bbox = draw.textbbox((0, 0), label, font=label_font)
-                        lw = bbox[2] - bbox[0]
-                        lh = bbox[3] - bbox[1]
+                        # 文字サイズ（理論値）
+                        bbox0 = draw.textbbox((0, 0), label, font=label_font)
+                        lw = bbox0[2] - bbox0[0]
+                        lh = bbox0[3] - bbox0[1]
 
-                        # 初期配置
+                        # 基準位置（若番ほど上）
                         base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
-                        lx_center = book_x - (lw/2)
+                        lx_center = book_x - (lw / 2)
                         ly = base_y
                         lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                        # ★ 当たり判定はテキスト矩形だけ
-                        cur_text = (lx, ly, lx+lw, ly+lh)
-                        while any(overlap(cur_text, box) for box in placed_boxes_row):
+                        # 実際の配置位置で bbox を取り直しながら衝突回避
+                        while True:
+                            bbox_at = draw.textbbox((lx, ly), label, font=label_font)  # ←実座標での厳密 bbox
+                            # パディング分広げた枠
+                            cur_padded = (
+                                bbox_at[0] - BOX_PAD_X,
+                                bbox_at[1] - BOX_PAD_Y,
+                                bbox_at[2] + BOX_PAD_X,
+                                bbox_at[3] + BOX_PAD_Y
+                            )
+                            # ぶつかっている？
+                            hit = any(not (cur_padded[2] <= bx1 or bx2 <= cur_padded[0] or
+                                           cur_padded[3] <= by1 or by2 <= cur_padded[1])
+                                      for (bx1, by1, bx2, by2) in placed_boxes_row)
+                            if not hit:
+                                break
+                            # さらに上にずらして再計算
                             ly -= (lh + line_gap + extra_shift)
-                            cur_text = (lx, ly, lx+lw, ly+lh)
 
                         # テキスト描画
-                        draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
+                        draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
+                        # 枠（塗りなし）
+                        draw.rectangle([cur_padded[0], cur_padded[1], cur_padded[2], cur_padded[3]],
+                                       outline=(0, 0, 0, 255), width=BOX_OUTLINE_W)
 
-                        # 枠は飾りとして後描画（判定には使わない）
-                        rect = (lx - rect_pad_x, ly - rect_pad_y,
-                                lx + lw + rect_pad_x, ly + lh + rect_pad_y)
-                        draw.rectangle(rect, outline=(0,0,0,255), width=rect_w)
+                        # 当たり判定リストに“枠”を追加
+                        placed_boxes_row.append(cur_padded)
 
-                        # 行内の衝突管理はテキスト矩形で持つ
-                        placed_boxes_row.append(cur_text)
-
-                        # いちばん下の“テキスト底”
-                        if (bottom_label_bottom is None) or (ly + lh > bottom_label_bottom):
-                            bottom_label_bottom = ly + lh
+                        # 線の起点用に最下段テキストの“実際の底”で更新
+                        bottom_label_bottom = max(bottom_label_bottom or cur_padded[3], cur_padded[3])
 
                     # 線はテキスト底 + 少し下 から
                     pad_top = 2 * scale_h

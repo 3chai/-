@@ -364,47 +364,47 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
                     for idx_item, (_, label) in enumerate(items):
-                    # 文字サイズ（理論値）
-                    bbox0 = draw.textbbox((0, 0), label, font=label_font)
-                    lw = bbox0[2] - bbox0[0]
-                    lh = bbox0[3] - bbox0[1]
+                        # 文字サイズ（理論値）
+                        bbox0 = draw.textbbox((0, 0), label, font=label_font)
+                        lw = bbox0[2] - bbox0[0]
+                        lh = bbox0[3] - bbox0[1]
 
-                    # 基準位置（若番ほど上）
-                    base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
-                    lx_center = book_x - (lw / 2)
-                    ly = base_y
-                    lx = max(margin, min(true_width - margin - lw, lx_center))
+                        # 基準位置（若番ほど上）
+                        base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
+                        lx_center = book_x - (lw / 2)
+                        ly = base_y
+                        lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                    # 実際の配置位置で bbox を取り直しながら衝突回避
-                    while True:
-                        bbox_at = draw.textbbox((lx, ly), label, font=label_font)  # ←実座標での厳密 bbox
-                        # パディング分広げた枠
-                        cur_padded = (
-                            bbox_at[0] - BOX_PAD_X,
-                            bbox_at[1] - BOX_PAD_Y,
-                            bbox_at[2] + BOX_PAD_X,
-                            bbox_at[3] + BOX_PAD_Y
-                        )
-                        # ぶつかっている？
-                        hit = any(not (cur_padded[2] <= bx1 or bx2 <= cur_padded[0] or
-                                       cur_padded[3] <= by1 or by2 <= cur_padded[1])
-                                  for (bx1, by1, bx2, by2) in placed_boxes_row)
-                        if not hit:
-                            break
-                        # さらに上にずらして再計算
-                        ly -= (lh + line_gap + extra_shift)
+                        # 実際の配置位置で bbox を取り直しながら衝突回避
+                        while True:
+                            bbox_at = draw.textbbox((lx, ly), label, font=label_font)  # ←実座標での厳密 bbox
+                            # パディング分広げた枠
+                            cur_padded = (
+                                bbox_at[0] - BOX_PAD_X,
+                                bbox_at[1] - BOX_PAD_Y,
+                                bbox_at[2] + BOX_PAD_X,
+                                bbox_at[3] + BOX_PAD_Y
+                            )
+                            # ぶつかっている？
+                            hit = any(not (cur_padded[2] <= bx1 or bx2 <= cur_padded[0] or
+                                           cur_padded[3] <= by1 or by2 <= cur_padded[1])
+                                      for (bx1, by1, bx2, by2) in placed_boxes_row)
+                            if not hit:
+                                break
+                            # さらに上にずらして再計算
+                            ly -= (lh + line_gap + extra_shift)
 
-                    # テキスト描画
-                    draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
-                    # 枠（塗りなし）
-                    draw.rectangle([cur_padded[0], cur_padded[1], cur_padded[2], cur_padded[3]],
-                                   outline=(0, 0, 0, 255), width=BOX_OUTLINE_W)
+                        # テキスト描画
+                        draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
+                        # 枠（塗りなし）
+                        draw.rectangle([cur_padded[0], cur_padded[1], cur_padded[2], cur_padded[3]],
+                                       outline=(0, 0, 0, 255), width=BOX_OUTLINE_W)
 
-                    # 当たり判定リストに“枠”を追加
-                    placed_boxes_row.append(cur_padded)
+                        # 当たり判定リストに“枠”を追加
+                        placed_boxes_row.append(cur_padded)
 
-                    # 線の起点用に最下段テキストの“実際の底”で更新
-                    bottom_label_bottom = max(bottom_label_bottom or cur_padded[3], cur_padded[3])
+                        # 線の起点用に最下段テキストの“実際の底”で更新
+                        bottom_label_bottom = max(bottom_label_bottom or cur_padded[3], cur_padded[3])
 
         # ---- 黒バー ----
         if last_frame_in_page:

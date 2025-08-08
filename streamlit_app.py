@@ -122,6 +122,19 @@ def generate_timesheet(file_bytes, preset):
     first_frame_top_y_true = preset["first_frame_top_y_true"]
     column_offset_x = preset["column_offset_x"]
     cell_x_positions_true = preset["cell_x_positions_true"]
+    
+# between の中央からどれだけ右へ動かすか（デフォルト値）
+MID_SHIFT_DEFAULT = 0.5          # 0.5コマ右へ
+MID_FINE_DEFAULT  = -3 * scale_w  # 追加のpx調整（左へ3px）
+# 特定ペアだけ個別調整（例：B–C, C–D がズレる）
+MID_SHIFT_OVERRIDES = {
+    ("B", "C"): 0.35,            # ここを好みで調整
+    ("C", "D"): 0.35,
+}
+MID_FINE_OVERRIDES = {
+    ("B", "C"): -4 * scale_w,    # ここも好みで（px）
+    ("C", "D"): -4 * scale_w,
+}
 
     # 1コマ幅（AとBの差）を推定
     try:
@@ -242,10 +255,23 @@ def generate_timesheet(file_bytes, preset):
                     if len(parts) == 3:
                         _, left, right = parts
                         if left in cell_x_positions_true and right in cell_x_positions_true:
-                            # まずは純粋な“間”（中央）
-                            book_x = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
-                            # 「〜の間」は 1コマ分だけ右へ
-                            book_x += koma_width
+                           # 中央
+                            mid = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
+
+                            # デフォルトのシフト値
+                            shift_koma = MID_SHIFT_DEFAULT
+                            fine_px    = MID_FINE_DEFAULT
+
+                            # B–C, C–D だけ上書き（必要なペアを追加してOK）
+                            key = (left, right)
+                            if key in MID_SHIFT_OVERRIDES:
+                                shift_koma = MID_SHIFT_OVERRIDES[key]
+                            if key in MID_FINE_OVERRIDES:
+                                fine_px = MID_FINE_OVERRIDES[key]
+                
+                            # 適用
+                            book_x = mid + shift_koma * koma_width + fine_px
+            
                 elif pos.startswith("after_"):
                     tgt = pos.replace("after_", "")
                     if tgt in cell_x_positions_true:

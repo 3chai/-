@@ -280,8 +280,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
         # ---- book マーカー（行内共有の重なり回避／枠は飾り）----
         if show_books:
             # 枠パディング＆線太さ（ここで定義：以降の計算で使用）
-            BOX_PAD_X = 2 * scale_w
-            BOX_PAD_Y = 2 * scale_h
+            BOX_PAD_X = 1 * scale_w
+            BOX_PAD_Y = 1 * scale_h
             BOX_OUTLINE_W = max(1, int(1.5 * scale_w))
 
             for _, row in df_page.iterrows():
@@ -324,8 +324,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     items.sort(key=lambda t: t[0])
 
                     # 調整（控えめ設定）
-                    line_gap    = 3*scale_h       # 基本の縦間隔
-                    extra_shift = 3*scale_h       # 衝突時の追加上げ量
+                    line_gap    = 2*scale_h       # 基本の縦間隔
+                    extra_shift = 1.5*scale_h       # 衝突時の追加上げ量
                     margin      = 12*scale_w
 
                     bottom_label_bottom = None

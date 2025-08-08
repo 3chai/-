@@ -259,12 +259,21 @@ def generate_timesheet(file_bytes, preset):
                     nums.sort(key=lambda t: t[0])     # 昇順。降順にしたいなら reverse=True
                     label = "-".join(s for _, s in nums)
 
-                # ラベルを縦線の上に中央配置
+                # ---- ラベルを縦線の上に描画（縦線は動かさない） ----
                 bbox = draw.textbbox((0, 0), label, font=label_font)
                 label_w = bbox[2] - bbox[0]
                 label_h = bbox[3] - bbox[1]
-                label_x = x_insert - (label_w / 2)
+
+                # 本来の中央配置（縦線にセンタリング）
+                label_x_center = x_insert - (label_w / 2)
                 label_y = line_top - label_h - 2 * scale_h
+
+                # 端で切れないように「ラベルだけ」クランプ（縦線は動かさない）
+                margin = 12 * scale_w  # 余白（お好みで 8〜16 * scale_w 等に）
+                min_x = margin
+                max_x = true_width - margin - label_w
+                label_x = max(min_x, min(max_x, label_x_center))
+                
                 draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
                 
         # ---- 黒バー（ページ末尾） ----

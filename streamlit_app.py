@@ -81,6 +81,7 @@ def preprocess_cells(df_raw, valid_cells):
 def get_book_positions(df, valid_cells):
     """_book列の列順から、挿入位置（before_/between_/after_）を決める。"""
     cols = list(df.columns)
+    # _book1 / book1 の両方を許容
     book_cols = [c for c in cols if re.match(r"^_?book\d+$", str(c), re.IGNORECASE)]
     positions = {}
     for b in book_cols:
@@ -89,13 +90,11 @@ def get_book_positions(df, valid_cells):
         left_cell = None
         for i in range(idx - 1, -1, -1):
             if cols[i] in valid_cells:
-                left_cell = cols[i]
-                break
+                left_cell = cols[i]; break
         right_cell = None
         for i in range(idx + 1, len(cols)):
             if cols[i] in valid_cells:
-                right_cell = cols[i]
-                break
+                right_cell = cols[i]; break
         if left_cell is None and right_cell is None:
             continue
         if left_cell is None:
@@ -122,19 +121,16 @@ def generate_timesheet(file_bytes, preset):
     first_frame_top_y_true = preset["first_frame_top_y_true"]
     column_offset_x = preset["column_offset_x"]
     cell_x_positions_true = preset["cell_x_positions_true"]
-    
-# between の中央からどれだけ右へ動かすか（デフォルト値）
-MID_SHIFT_DEFAULT = 0.5          # 0.5コマ右へ
-MID_FINE_DEFAULT  = -3 * scale_w  # 追加のpx調整（左へ3px）
-# 特定ペアだけ個別調整（例：B–C, C–D がズレる）
-MID_SHIFT_OVERRIDES = {
-    ("B", "C"): 0.35,            # ここを好みで調整
-    ("C", "D"): 0.35,
-}
-MID_FINE_OVERRIDES = {
-    ("B", "C"): -4 * scale_w,    # ここも好みで（px）
-    ("C", "D"): -4 * scale_w,
-}
+
+    # スケール
+    scale_h = frame_height_true / BASE_FRAME_HEIGHT
+    scale_w = true_width / BASE_WIDTH
+
+    # between の補正ノブ（←ここを触れば微調整できる）
+    MID_SHIFT_DEFAULT = 0.5          # “間”の中央から 0.5 コマ右へ
+    MID_FINE_DEFAULT  = -3 * scale_w  # 追加px（左へ3px）
+    MID_SHIFT_OVERRIDES = {("B","C"): 0.35, ("C","D"): 0.35}   # B–C/C–D専用
+    MID_FINE_OVERRIDES  = {("B","C"): -4 * scale_w, ("C","D"): -4 * scale_w}
 
     # 1コマ幅（AとBの差）を推定
     try:
@@ -144,10 +140,6 @@ MID_FINE_OVERRIDES = {
         diffs = [xs[i+1] - xs[i] for i in range(len(xs) - 1)]
         koma_width = sum(diffs) / len(diffs) if diffs else 0
 
-    # スケール
-    scale_h = frame_height_true / BASE_FRAME_HEIGHT
-    scale_w = true_width / BASE_WIDTH
-
     circle_offset_x = BASE_CIRCLE_OFFSET_X * scale_w
     circle_offset_y = BASE_CIRCLE_OFFSET_Y * scale_h
     alphabet_offset_x = BASE_ALPHABET_OFFSET_X * scale_w
@@ -155,16 +147,14 @@ MID_FINE_OVERRIDES = {
     bar_width = BASE_BAR_WIDTH * scale_w
     bar_shift_x = BASE_BAR_SHIFT_X * scale_w
 
-    # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
-    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))  # book少し小さめ
+    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.5 * scale_h))  # book小さめ
 
     # CSV
     df = read_csv_flexibly(file_bytes)
     if df.empty or 'Frame' not in df.columns:
         return [], 0
-
     df['Frame'] = clean_frame_column(df['Frame'])
     df = df.dropna(subset=['Frame'])
     df['Frame'] = df['Frame'].astype(int)
@@ -211,8 +201,7 @@ MID_FINE_OVERRIDES = {
                 y_draw = y + text_offset_y
 
                 if timing in ('●', '○'):
-                    x += circle_offset_x
-                    y_draw += circle_offset_y
+                    x += circle_offset_x; y_draw += circle_offset_y
                 elif timing == '×':
                     x += cross_offset_x
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
@@ -221,57 +210,45 @@ MID_FINE_OVERRIDES = {
                 font = font_small if len(timing) >= 3 else font_large
                 draw.text((x, y_draw), timing, fill=(0, 0, 0, 255), font=font)
 
-        # ---- bookマーカー描画（通常セルに影響しない安全版） ----
+        # ---- bookマーカー描画（3コマ上・重なり回避・縦線上に延長） ----
         for _, row in df_page.iterrows():
             frame = int(row['Frame'])
             idx = (frame - 1) % frames_per_page
-            col_block = idx // 72                 # 0=左, 1=右
+            col_block = idx // 72
             row_pos = idx % 72
 
-            # 行の基準位置（このフレームの行）
             row_y_base = first_frame_top_y_true + row_pos * frame_height_true
             col_x_offset = column_offset_x if col_block == 1 else 0
 
             # この行でbook値が入っているものだけ抽出（位置ごと）
             present = {}
             for book_col, pos in book_positions.items():
-                cname = norm_str(book_col)  # "_book2" でも "book2" でもOK
+                cname = norm_str(book_col)
                 if (cname in row.index) and is_filled(row[cname]):
                     present.setdefault(pos, []).append(cname)
 
-            # 既に置いたラベルの当たり判定（この行だけ）
             placed_boxes = []
 
             for pos, books_here in present.items():
-                # ---- book専用の座標（他と混ざらない）----
                 book_x = None
                 if pos.startswith("before_"):
                     tgt = pos.replace("before_", "")
                     if tgt in cell_x_positions_true:
                         book_x = cell_x_positions_true[tgt] - 10 * scale_w
-                    # before_* はシフトしない（Aの前はそのまま）
                 elif pos.startswith("between_"):
                     parts = pos.split("_")
                     if len(parts) == 3:
                         _, left, right = parts
                         if left in cell_x_positions_true and right in cell_x_positions_true:
-                           # 中央
                             mid = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
-
-                            # デフォルトのシフト値
                             shift_koma = MID_SHIFT_DEFAULT
                             fine_px    = MID_FINE_DEFAULT
-
-                            # B–C, C–D だけ上書き（必要なペアを追加してOK）
                             key = (left, right)
                             if key in MID_SHIFT_OVERRIDES:
                                 shift_koma = MID_SHIFT_OVERRIDES[key]
                             if key in MID_FINE_OVERRIDES:
                                 fine_px = MID_FINE_OVERRIDES[key]
-                
-                            # 適用
                             book_x = mid + shift_koma * koma_width + fine_px
-            
                 elif pos.startswith("after_"):
                     tgt = pos.replace("after_", "")
                     if tgt in cell_x_positions_true:
@@ -279,48 +256,41 @@ MID_FINE_OVERRIDES = {
                 if book_x is None:
                     continue
 
-                # ページ右カラムならカラムオフセット、さらに左に5px
+                # ページ右列オフセット & 少し左へ
                 book_x = book_x + col_x_offset - 5
                 # 3コマ分上に配置する基準
                 y_ref = row_y_base - (frame_height_true * 3)
 
-                # 縦線の“元の”長さ（後で上に延長する）
+                # 縦線の元の長さ
                 base_line_top    = y_ref - 4 * scale_h
                 base_line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h
 
-                # 若い番号ほど上に縦並び
+                # 若い番号ほど上（book1→一番上）
                 items = []
                 for b in books_here:
-                    s = norm_str(b).replace("_", "")   # "book2"
+                    s = norm_str(b).replace("_", "")
                     m = re.search(r"(\d+)$", s)
                     n = int(m.group(1)) if m else 0
                     items.append((n, s))
-                items.sort(key=lambda t: t[0])  # book1, book2, …
+                items.sort(key=lambda t: t[0])
 
                 line_gap = 2 * scale_h
                 margin   = 12 * scale_w
-
-                # この位置で一番上に来たラベルのy
                 min_label_y = None
 
-                # ラベルを上から順に置く
                 for idx_item, (_, label) in enumerate(items):
-                    # サイズ
                     bbox = draw.textbbox((0, 0), label, font=label_font)
                     lw = bbox[2] - bbox[0]
                     lh = bbox[3] - bbox[1]
 
-                    # book1が最上段、その下にbook2…（基準は縦線上端の少し上）
                     base_y = (base_line_top - lh - 2 * scale_h) - idx_item * (lh + line_gap)
-
-                    # 縦線中心で水平センター
                     lx_center = book_x - (lw / 2)
                     ly = base_y
 
-                    # 左右端クランプ（縦線は動かさない）
+                    # 端クランプ（縦線は動かさない）
                     lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                    # 別位置ラベルと当たったらさらに上へ
+                    # 重なり回避（この行内）
                     def overlap(a, b):
                         ax1, ay1, ax2, ay2 = a
                         bx1, by1, bx2, by2 = b
@@ -331,14 +301,12 @@ MID_FINE_OVERRIDES = {
                         ly -= (lh + line_gap)
                         cur = (lx, ly, lx + lw, ly + lh)
 
-                    # ラベル描画＆登録
                     draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
                     placed_boxes.append(cur)
-
                     if (min_label_y is None) or (ly < min_label_y):
                         min_label_y = ly
 
-                # ---- ラベルを置いた“後”で縦線を描画（上に延長）----
+                # ラベル基準に縦線を上へ延長
                 line_top    = base_line_top
                 line_bottom = base_line_bottom
                 if min_label_y is not None and (min_label_y - 2 * scale_h) < line_top:
@@ -365,7 +333,7 @@ MID_FINE_OVERRIDES = {
     return result_images, max_frame
 
 # =============== Streamlit UI ===============
-st.title("ちゃいむしーと Web版 v1.9.6｜bookマーカー（縦線＋水平ラベル）× 3コマ上・重なり回避")
+st.title("ちゃいむしーと Web版 v1.9.7｜bookマーカー between 補正つき")
 selected_preset = st.selectbox("会社プリセットを選択", list(presets.keys()))
 preset_cfg = presets[selected_preset]
 

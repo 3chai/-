@@ -364,46 +364,47 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
                     for idx_item, (_, label) in enumerate(items):
-                        # 文字サイズ
-                        bbox = draw.textbbox((0, 0), label, font=label_font)
-                        lw = bbox[2] - bbox[0]
-                        lh = bbox[3] - bbox[1]
+                    # 文字サイズ（理論値）
+                    bbox0 = draw.textbbox((0, 0), label, font=label_font)
+                    lw = bbox0[2] - bbox0[0]
+                    lh = bbox0[3] - bbox0[1]
 
-                        # 基準位置（若番ほど上）
-                        base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
-                        lx_center = book_x - (lw/2)
-                        ly = base_y
+                    # 基準位置（若番ほど上）
+                    base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
+                    lx_center = book_x - (lw / 2)
+                    ly = base_y
+                    lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                        # はみ出し防止
-                        lx = max(margin, min(true_width - margin - lw, lx_center))
+                    # 実際の配置位置で bbox を取り直しながら衝突回避
+                    while True:
+                        bbox_at = draw.textbbox((lx, ly), label, font=label_font)  # ←実座標での厳密 bbox
+                        # パディング分広げた枠
+                        cur_padded = (
+                            bbox_at[0] - BOX_PAD_X,
+                            bbox_at[1] - BOX_PAD_Y,
+                            bbox_at[2] + BOX_PAD_X,
+                            bbox_at[3] + BOX_PAD_Y
+                        )
+                        # ぶつかっている？
+                        hit = any(not (cur_padded[2] <= bx1 or bx2 <= cur_padded[0] or
+                                       cur_padded[3] <= by1 or by2 <= cur_padded[1])
+                                  for (bx1, by1, bx2, by2) in placed_boxes_row)
+                        if not hit:
+                            break
+                        # さらに上にずらして再計算
+                        ly -= (lh + line_gap + extra_shift)
 
-                        # 衝突判定は「枠込み」のボックスで行う
-                        cur_padded = (lx - BOX_PAD_X, ly - BOX_PAD_Y,
-                                      lx + lw + BOX_PAD_X, ly + lh + BOX_PAD_Y)
-                        while any(overlap(cur_padded, box) for box in placed_boxes_row):
-                            ly -= (lh + line_gap + extra_shift)
-                            cur_padded = (lx - BOX_PAD_X, ly - BOX_PAD_Y,
-                                          lx + lw + BOX_PAD_X, ly + lh + BOX_PAD_Y)
+                    # テキスト描画
+                    draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=label_font)
+                    # 枠（塗りなし）
+                    draw.rectangle([cur_padded[0], cur_padded[1], cur_padded[2], cur_padded[3]],
+                                   outline=(0, 0, 0, 255), width=BOX_OUTLINE_W)
 
-                        # ラベル本体
-                        draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
-                        # 枠（塗りなし）
-                        draw.rectangle([cur_padded[0], cur_padded[1], cur_padded[2], cur_padded[3]],
-                                       outline=(0,0,0,255), width=BOX_OUTLINE_W)
+                    # 当たり判定リストに“枠”を追加
+                    placed_boxes_row.append(cur_padded)
 
-                        placed_boxes_row.append(cur_padded)
-
-                        if (bottom_label_bottom is None) or (ly + lh > bottom_label_bottom):
-                            bottom_label_bottom = ly + lh
-
-                    # ラベル直下から線（最下段ラベルに追従）
-                    pad_top = 2 * scale_h
-                    line_top = bottom_label_bottom + pad_top if bottom_label_bottom is not None else base_line_top
-                    # 下端は “高さスライダー”に応じて延長
-                    extra_len_by_koma = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
-                    line_bottom = max(line_top + 1, base_line_bottom + extra_len_by_koma)
-                    line_w = max(1, int(2*scale_w))
-                    draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0,0,0,255), width=line_w)
+                    # 線の起点用に最下段テキストの“実際の底”で更新
+                    bottom_label_bottom = max(bottom_label_bottom or cur_padded[3], cur_padded[3])
 
         # ---- 黒バー ----
         if last_frame_in_page:

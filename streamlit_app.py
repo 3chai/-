@@ -129,18 +129,18 @@ def generate_timesheet(file_bytes, preset):
     bar_width = BASE_BAR_WIDTH * scale_w
     bar_shift_x = BASE_BAR_SHIFT_X * scale_w
 
-    # 1コマ幅（AとBの差）を推定
+    # 1コマ幅（AとBの差）を推定（必要に応じてプリセットに override を追加してもOK）
     try:
         koma_width = cell_x_positions_true['B'] - cell_x_positions_true['A']
     except Exception:
         xs = [cell_x_positions_true[c] for c in sorted(cell_x_positions_true.keys())]
         diffs = [xs[i+1] - xs[i] for i in range(len(xs)-1)]
-        koma_width = sum(diffs)/len(diffs) if diffs else 0
+        koma_width = (sum(diffs)/len(diffs)) if diffs else 0
 
-    # 「between_*」のときの右シフト量（デフォルトは +0.5 コマ）
-    MID_SHIFT_DEFAULT = 0.4
-    MID_FINE_DEFAULT  = 0.0 * scale_w
-    MID_SHIFT_OVERRIDES = {}
+    # 「between_*」の押し出し：左セル中心 + koma_width * SHIFT + px微調整
+    MID_SHIFT_DEFAULT = 0.5       # 0.5コマ右へ
+    MID_FINE_DEFAULT  = -3 * scale_w  # px微調整（共通）
+    MID_SHIFT_OVERRIDES = {}      # ← 特別補正は今は無し
     MID_FINE_OVERRIDES  = {}
 
     # フォント
@@ -223,7 +223,7 @@ def generate_timesheet(file_bytes, preset):
 
             placed_boxes = []  # ラベルの当たり判定（行内）
             for pos, books_here in present.items():
-                # 座標計算（Aの前=そのまま、間=右にシフト）
+                # 座標計算（Aの前=そのまま、間=左セル + koma*shift）
                 book_x = None
                 if pos.startswith("before_"):
                     tgt = pos.replace("before_","")
@@ -232,10 +232,9 @@ def generate_timesheet(file_bytes, preset):
                 elif pos.startswith("between_"):
                     _, left, right = pos.split("_")
                     if left in cell_x_positions_true and right in cell_x_positions_true:
-                        mid = (cell_x_positions_true[left] + cell_x_positions_true[right]) / 2
                         shift_k = MID_SHIFT_OVERRIDES.get((left,right), MID_SHIFT_DEFAULT)
                         fine_px = MID_FINE_OVERRIDES.get((left,right), MID_FINE_DEFAULT)
-                        book_x = mid + shift_k * koma_width + fine_px
+                        book_x = cell_x_positions_true[left] + koma_width * shift_k + fine_px
                 elif pos.startswith("after_"):
                     tgt = pos.replace("after_","")
                     if tgt in cell_x_positions_true:
@@ -265,8 +264,9 @@ def generate_timesheet(file_bytes, preset):
                 bottom_label_bottom = None
 
                 for idx_item, (_, label) in enumerate(items):
-                    lw, lh = [d for d in ImageDraw.Draw(Image.new("RGB",(1,1))).textbbox((0,0), label, font=label_font)][2:]
-                    lw -= 0; lh -= 0  # bbox(0,0,w,h)
+                    bbox = draw.textbbox((0, 0), label, font=label_font)
+                    lw = bbox[2] - bbox[0]
+                    lh = bbox[3] - bbox[1]
 
                     base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
                     lx_center = book_x - (lw/2)
@@ -323,7 +323,7 @@ def generate_timesheet(file_bytes, preset):
     return result_images, max_frame
 
 # =============== UI ===============
-st.title("ちゃいむしーと Web版 v1.9.7｜book線=最下段ラベル合わせ＋3コマ上")
+st.title("ちゃいむしーと Web版 v1.9.8｜between=左セル+コマ幅×係数（全間共通）")
 selected_preset = st.selectbox("会社プリセットを選択", list(presets.keys()))
 preset_cfg = presets[selected_preset]
 

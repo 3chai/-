@@ -138,10 +138,10 @@ def generate_timesheet(file_bytes, preset):
         koma_width = sum(diffs)/len(diffs) if diffs else 0
 
     # 「between_*」のときの右シフト量（デフォルトは +0.5 コマ）
-    MID_SHIFT_DEFAULT = 0.5
-    MID_FINE_DEFAULT  = -3 * scale_w  # ピクセル微調整
-    MID_SHIFT_OVERRIDES = {("B","C"): 0.35, ("C","D"): 0.35}
-    MID_FINE_OVERRIDES  = {("B","C"): -4 * scale_w, ("C","D"): -4 * scale_w}
+    MID_SHIFT_DEFAULT = 0.0
+    MID_FINE_DEFAULT  = 0.0 * scale_w
+    MID_SHIFT_OVERRIDES = {}
+    MID_FINE_OVERRIDES  = {}
 
     # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))

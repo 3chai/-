@@ -204,8 +204,10 @@ def generate_timesheet(file_bytes, preset):
             idx = (frame - 1) % frames_per_page
             col_block = idx // 72
             row_pos = idx % 72
-            y = first_frame_top_y_true + row_pos * frame_height_true
-            x_col = column_offset_x if col_block == 1 else 0
+
+            # 基準位置（そのフレームの行の上端）
+            y_base = first_frame_top_y_true + row_pos * frame_height_true
+            x_col  = column_offset_x if col_block == 1 else 0
 
             for book_col, pos in book_positions.items():
                 # この行でbook列に値が入っているときだけ描画
@@ -232,20 +234,25 @@ def generate_timesheet(file_bytes, preset):
                 if x_insert is None:
                     continue
 
-                x_insert += x_col
+                # ← 左へ5px
+                x_insert = x_insert + x_col - 5 * scale_w
 
-                # 縦線（1コマ分＋余白）
-                line_top = y - 4 * scale_h
-                line_bottom = y + frame_height_true + 2 * scale_h
+                # ↑ 上へ3コマ（frame_height_true * 3）
+                y_ref = y_base - (frame_height_true * 3)
+
+                # 縦線の長さ：元より +1コマ
+                line_top = y_ref - 4 * scale_h
+                line_bottom = y_ref + (frame_height_true * 2) + 2 * scale_h  # 1コマ分長く
+
                 line_w = max(1, int(2 * scale_w))
                 draw.line([(x_insert, line_top), (x_insert, line_bottom)], fill=(0, 0, 0, 255), width=line_w)
 
-                # ラベルは固定で"book"（要望通り）。中央寄せで線の少し上に。
-                label = "book"
+                # ラベル（中央揃え、線の少し上）
+                label = "book"  # 必要なら row[book_col] から "book1" 等にしてもOK
                 bbox = draw.textbbox((0, 0), label, font=label_font)
                 label_w = bbox[2] - bbox[0]
                 label_h = bbox[3] - bbox[1]
-                label_x = x_insert - label_w / 2
+                label_x = x_insert - (label_w / 2)
                 label_y = line_top - label_h - 2 * scale_h
                 draw.text((label_x, label_y), label, fill=(0, 0, 0, 255), font=label_font)
 

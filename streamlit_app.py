@@ -124,16 +124,15 @@ def generate_timesheet(file_bytes, preset):
     first_frame_top_y_true = preset["first_frame_top_y_true"]
     column_offset_x = preset["column_offset_x"]
     cell_x_positions_true = preset["cell_x_positions_true"]
-    
-        # 1コマ幅（列間隔）を推定
+
+    # ←← ここに追加（AとBの“中央座標”から1コマ幅を推定）
     try:
         koma_width = cell_x_positions_true['B'] - cell_x_positions_true['A']
     except Exception:
-        # A,Bがないテンプレの保険：隣接間隔の平均
         xs = [cell_x_positions_true[c] for c in sorted(cell_x_positions_true.keys())]
-        diffs = [xs[i+1]-xs[i] for i in range(len(xs)-1)]
-        koma_width = sum(diffs)/len(diffs) if diffs else 0
-
+        diffs = [xs[i+1] - xs[i] for i in range(len(xs) - 1)]
+        koma_width = sum(diffs) / len(diffs) if diffs else 0
+        
     # スケール
     scale_h = frame_height_true / BASE_FRAME_HEIGHT
     scale_w = true_width / BASE_WIDTH

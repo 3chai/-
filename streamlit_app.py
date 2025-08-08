@@ -56,6 +56,7 @@ def read_csv_flexibly(file_bytes):
         df.columns = [col[1] if col[1] != '' else col[0] for col in df.columns]
         if 'Unnamed: 0_level_1' in df.columns:
             df = df.rename(columns={'Unnamed: 0_level_1': 'Frame'})
+        df.columns = [unicodedata.normalize("NFKC", str(c)).strip() for c in df.columns]
         return df
     except Exception as e:
         st.error(f"CSVの読み込みに失敗しました: {e}")
@@ -85,7 +86,7 @@ def get_book_positions(df, valid_cells):
     返り値: {book_col: "before_A" / "between_A_B" / "after_H" など}
     """
     cols = list(df.columns)
-    book_cols = [c for c in cols if re.match(r"_book\d+", c)]
+    book_cols = [c for c in cols if re.match(r"^_?book\d+$", str(c), re.IGNORECASE)]
     positions = {}
     for b in book_cols:
         idx = cols.index(b)
@@ -110,6 +111,14 @@ def get_book_positions(df, valid_cells):
         else:
             positions[b] = f"between_{left_cell}_{right_cell}"
     return positions
+
+def norm_str(s: object) -> str:
+    # 全角→半角、全角スペース→半角スペース、前後スペース除去
+    return unicodedata.normalize("NFKC", str(s)).replace("\u3000", " ").strip()
+
+def is_filled(v: object) -> bool:
+    s = norm_str(v)
+    return s not in ("", "nan", "None")
 
 # =============== 本体 ===============
 def generate_timesheet(file_bytes, preset):
@@ -210,11 +219,25 @@ def generate_timesheet(file_bytes, preset):
             x_col  = column_offset_x if col_block == 1 else 0
 
             # この行でbook値が入っているものだけ抽出し、位置ごとにグループ化
+            # present 作成（列名・値とも正規化して判定）
             present = {}
             for book_col, pos in book_positions.items():
-                if book_col in row and str(row[book_col]).strip() != "":
-                    present.setdefault(pos, []).append(book_col)
+                col = norm_str(book_col)          # 列名を正規化（'_book1' でも 'book1' でも拾う）
+                if col in row and is_filled(row[col]):
+                    present.setdefault(pos, []).append(col)
 
+            # ラベル：単独 or 複数は「book2-book3」形式（番号は昇順）
+            if len(books_here) == 1:
+                label = norm_str(books_here[0]).replace("_", "")          # "_book1" -> "book1"
+            else:
+                nums = []
+                for b in books_here:
+                    s = norm_str(b).replace("_", "")                      # "book2"
+                    m = re.search(r"(\d+)$", s)
+                    n = int(m.group(1)) if m else 0
+                    nums.append((n, s))
+                nums.sort(key=lambda t: t[0])                              # 昇順
+                label = "-".join(s for _, s in nums)
             # 位置ごとに描画
             for pos, books_here in present.items():
                 # 基準x座標の計算

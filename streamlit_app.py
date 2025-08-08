@@ -152,7 +152,7 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
     if pos.startswith("before_"):
         tgt = pos.replace("before_", "")
         if tgt in cell_x_positions_true:
-            book_x = cell_x_positions_true[tgt] - 8 * scale_w
+            book_x = cell_x_positions_true[left] + 0 * koma_width - 5 * scale_w
     elif pos.startswith("between_"):
         parts = pos.split("_")
         if len(parts) == 3:

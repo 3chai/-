@@ -29,18 +29,18 @@ presets = {
         "default_celllabel_koma": 0,
     },
     "ぴえろ": {
-        "first_frame_top_y_true": 800,                 # 最初のフレームの上端Y
-        "frame_height_true": 27.5,                       # 1コマの高さ
+        "first_frame_top_y_true": 800,                  # 最初のフレームの上端Y
+        "frame_height_true": 27.5,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 87 + 30.5 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 949,                        # 右カラムまでのXオフセット
+        "column_offset_x": 949,                         # 右カラムまでのXオフセット
         "true_width": 2026,
         "true_height": 2866,
-        "default_book_koma": 5,                        # お好みで調整OK
+        "default_book_koma": 5,
         "default_celllabel_koma": 0
     }
 }
 
-# 位置調整の基準（Andraft基準）
+# =============== 位置調整の基準（Andraft基準） ===============
 BASE_FRAME_HEIGHT = 49.5
 BASE_WIDTH = 3508
 BASE_CIRCLE_OFFSET_X = -5
@@ -56,6 +56,11 @@ BASE_BOOK_OFFSET_KOMA = 3
 # セル名オフセット（px基準 → スケール）
 HEADER_X_NUDGE_PX      = 10   # 右に10px（負で左）
 HEADER_BOTTOM_NUDGE_PX = -80  # 下端基準から上に80px（負で上）
+
+# ○/●/〇 の専用縮小＆位置補正
+CIRCLE_SCALE   = 0.7   # 1.0=等倍。小さくしたいなら 0.5〜0.8 くらい
+CIRCLE_NUDGE_X = 0     # px（正=右, 負=左）
+CIRCLE_NUDGE_Y = 0     # px（正=下,  負=上）
 
 # フォント
 font_path    = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
@@ -204,6 +209,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
+    # ○/●/〇専用フォント（縮小）
+    font_circle = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * CIRCLE_SCALE))
     label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))  # book
     try:
         cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.6 * scale_h))
@@ -277,19 +284,24 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 x = x_base if col_block==0 else x_base + column_offset_x
                 y_draw = y + text_offset_y
 
-                if timing in ('●','○'):
-                    x += circle_offset_x; y_draw += circle_offset_y
+                # 記号の位置＆フォント
+                if timing in ('●','○','〇'):
+                    x += circle_offset_x + (CIRCLE_NUDGE_X * scale_w)
+                    y_draw += circle_offset_y + (CIRCLE_NUDGE_Y * scale_h)
+                    font = font_circle
                 elif timing == '×':
                     x += cross_offset_x
+                    font = font_large
                 elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
                     x += alphabet_offset_x
+                    font = font_large if len(timing) < 3 else font_small
+                else:
+                    font = font_small if len(timing) >= 3 else font_large
 
-                font = font_small if len(timing)>=3 else font_large
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
 
         # ---- book マーカー（行内共有の重なり回避／枠は飾り）----
         if show_books:
-            # 枠パディング＆線太さ（ここで定義：以降の計算で使用）
             BOX_PAD_X = 1 * scale_w
             BOX_PAD_Y = 1 * scale_h
             BOX_OUTLINE_W = max(1, int(1.5 * scale_w))
@@ -333,9 +345,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         items.append((n, s))
                     items.sort(key=lambda t: t[0])
 
-                    # 調整（控えめ設定）
-                    line_gap    = 2*scale_h       # 基本の縦間隔
-                    extra_shift = 3*scale_h       # 衝突時の追加上げ量
+                    line_gap    = 2*scale_h
+                    extra_shift = 3*scale_h
                     margin      = 12*scale_w
 
                     bottom_label_bottom = None
@@ -386,7 +397,6 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     # ラベル直下から線（最下段ラベルに追従）
                     pad_top = 2 * scale_h
                     line_top = (bottom_label_bottom + pad_top) if bottom_label_bottom is not None else base_line_top
-                    # 下端は “高さスライダー”に応じて延長
                     extra_len = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
                     line_bottom = max(line_top + 1, base_line_bottom + extra_len)
                     line_w = max(1, int(2*scale_w))

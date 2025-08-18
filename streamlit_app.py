@@ -28,6 +28,14 @@ presets = {
         "default_book_koma": 5,
         "default_celllabel_koma": 0,
     }
+        “ぴえろ”: {
+        "first_frame_top_y_true": 805,
+        "frame_height_true": 29,
+        "cell_x_positions_true": {cell: 78 + 28 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1028,
+        "true_width": 2026,
+        "true_height": 2866
+    }
 }
 
 # 位置調整の基準（Andraft基準）

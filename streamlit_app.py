@@ -58,9 +58,9 @@ HEADER_X_NUDGE_PX      = 10   # 右に10px（負で左）
 HEADER_BOTTOM_NUDGE_PX = -80  # 下端基準から上に80px（負で上）
 
 # ○/●/〇 の専用縮小＆位置補正
-CIRCLE_SCALE   = 0.7   # 1.0=等倍。小さくしたいなら 0.5〜0.8 くらい
-CIRCLE_NUDGE_X = 0     # px（正=右, 負=左）
-CIRCLE_NUDGE_Y = 0     # px（正=下,  負=上）
+CIRCLE_SCALE   = 0.5   # 1.0=等倍。小さくしたいなら 0.5〜0.8 くらい
+CIRCLE_NUDGE_X = 1     # px（正=右, 負=左）
+CIRCLE_NUDGE_Y = 2     # px（正=下,  負=上）
 
 # フォント
 font_path    = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")

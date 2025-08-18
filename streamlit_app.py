@@ -28,13 +28,15 @@ presets = {
         "default_book_koma": 5,
         "default_celllabel_koma": 0,
     },
-        “ぴえろ”: {
-        "first_frame_top_y_true": 805,
-        "frame_height_true": 29,
+    "ぴえろ": {
+        "first_frame_top_y_true": 805,                 # 最初のフレームの上端Y
+        "frame_height_true": 29,                       # 1コマの高さ
         "cell_x_positions_true": {cell: 78 + 28 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 1028,
+        "column_offset_x": 1028,                        # 右カラムまでのXオフセット
         "true_width": 2026,
-        "true_height": 2866
+        "true_height": 2866,
+        "default_book_koma": 5,                        # お好みで調整OK
+        "default_celllabel_koma": 0
     }
 }
 

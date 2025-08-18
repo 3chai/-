@@ -454,7 +454,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("ちゃいむしーと Web版 v3.1.1｜book枠＆重なり回避（行内共有）＋セル名縦書き")
+st.title("ちゃいむしーと Web版 v3.1.1")
 
 # プリセット選択
 selected_preset = st.selectbox("会社プリセット", list(presets.keys()))

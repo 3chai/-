@@ -27,7 +27,7 @@ presets = {
         "true_height": 2480,
         "default_book_koma": 5,
         "default_celllabel_koma": 0,
-    }
+    },
         “ぴえろ”: {
         "first_frame_top_y_true": 805,
         "frame_height_true": 29,

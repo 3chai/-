@@ -236,6 +236,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     max_frame = df['Frame'].max()
     frames_per_page = 144
     total_pages = math.ceil(max_frame / frames_per_page)
+    last_frame_global = max_frame
     result_images = []
 
     cell_labels = cell_labels or {}
@@ -402,19 +403,25 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     line_w = max(1, int(2*scale_w))
                     draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0,0,0,255), width=line_w)
 
-        # ---- 黒バー ----
-        if last_frame_in_page:
-            idx_last = (last_frame_in_page - 1) % frames_per_page
+        # ---- 黒バー（全体の最後のフレーム位置にのみ描画）----
+        # いまのページが最終ページなら描画する
+        if page == total_pages - 1:
+            idx_last = (last_frame_global - 1) % frames_per_page
             col_last = idx_last // 72
             row_last = idx_last % 72
+
             bar_y = first_frame_top_y_true + (row_last + 1) * frame_height_true
-            bar_x = 0 if col_last==0 else column_offset_x
+            bar_x = 0 if col_last == 0 else column_offset_x
+
             draw.rectangle(
-                [(bar_x + 5 + BASE_BAR_SHIFT_X * (true_width / BASE_WIDTH), bar_y),
-                 (bar_x + 5 + BASE_BAR_SHIFT_X * (true_width / BASE_WIDTH) + BASE_BAR_WIDTH * (true_width / BASE_WIDTH),
-                  bar_y + frame_height_true*2)],
-                fill=(0,0,0,128)
+                [
+                    (bar_x + 5 + BASE_BAR_SHIFT_X * (true_width / BASE_WIDTH), bar_y),
+                    (bar_x + 5 + BASE_BAR_SHIFT_X * (true_width / BASE_WIDTH) + BASE_BAR_WIDTH * (true_width / BASE_WIDTH),
+                     bar_y + frame_height_true * 2)
+                ],
+                fill=(0, 0, 0, 128)
             )
+    
 
         result_images.append(img)
 

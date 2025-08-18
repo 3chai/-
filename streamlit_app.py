@@ -35,8 +35,8 @@ presets = {
         "column_offset_x": 950.5,                         # 右カラムまでのXオフセット
         "true_width": 2026,
         "true_height": 2866,
-        "default_book_koma": 5,
-        "default_celllabel_koma": 0
+        "default_book_koma": 4,
+        "default_celllabel_koma": 1
     }
 }
 

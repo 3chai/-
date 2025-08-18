@@ -29,7 +29,7 @@ presets = {
         "default_celllabel_koma": 0,
     },
     "ぴえろ": {
-        "first_frame_top_y_true": 805,                 # 最初のフレームの上端Y
+        "first_frame_top_y_true": 800,                 # 最初のフレームの上端Y
         "frame_height_true": 27,                       # 1コマの高さ
         "cell_x_positions_true": {cell: 88 + 28 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1028,                        # 右カラムまでのXオフセット

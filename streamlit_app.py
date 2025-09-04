@@ -32,14 +32,14 @@ presets = {
         "first_frame_top_y_true": 800,                  # 最初のフレームの上端Y
         "frame_height_true": 27.5,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 86 + 30.8 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 951,                         # 右カラムまでのXオフセット
+        "column_offset_x": 981.8        ,                         # 右カラムまでのXオフセット
         "true_width": 2026,
         "true_height": 2866,
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     },
     "CygamesPictures": {
-        "first_frame_top_y_true": 779.5,                  # 最初のフレームの上端Y
+        "first_frame_top_y_true": 779,                  # 最初のフレームの上端Y
         "frame_height_true": 33.93,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 109 + 37 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1125,

@@ -39,8 +39,8 @@ presets = {
         "default_celllabel_koma": 1
     },
     "CygamesPictures": {
-        "first_frame_top_y_true": 780,
-        "frame_height_true": 817/24,  # ≒ 34.041666666666664
+        "first_frame_top_y_true": 780,                  # 最初のフレームの上端Y
+        "frame_height_true": 34,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 109 + 37 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1125,
         "true_width": 2340,
@@ -49,6 +49,7 @@ presets = {
         "default_celllabel_koma": 1
     }
 }
+
 
 # =============== 位置調整の基準（Andraft基準） ===============
 BASE_FRAME_HEIGHT = 49.5

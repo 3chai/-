@@ -38,6 +38,16 @@ presets = {
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     }
+     “CygamesPictures: {
+        "first_frame_top_y_true": 764,                  # 最初のフレームの上端Y
+        "frame_height_true": 32,                      # 1コマの高さ
+        "cell_x_positions_true": {cell: 99 + 35 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1268,                         　# 右カラムまでのXオフセット
+        "true_width": 2340,
+        "true_height": 3307,
+        "default_book_koma": 4,
+        "default_celllabel_koma": 1
+    }
 }
 
 # =============== 位置調整の基準（Andraft基準） ===============

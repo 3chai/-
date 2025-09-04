@@ -42,7 +42,7 @@ presets = {
         "first_frame_top_y_true": 764,                  # 最初のフレームの上端Y
         "frame_height_true": 32,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 99 + 35 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 1268,                         　# 右カラムまでのXオフセット
+        "column_offset_x": 1268,
         "true_width": 2340,
         "true_height": 3307,
         "default_book_koma": 4,

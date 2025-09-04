@@ -37,7 +37,7 @@ presets = {
         "true_height": 2866,
         "default_book_koma": 4,
         "default_celllabel_koma": 1
-    }
+    },
      “CygamesPictures": {
         "first_frame_top_y_true": 764,                  # 最初のフレームの上端Y
         "frame_height_true": 32,                      # 1コマの高さ

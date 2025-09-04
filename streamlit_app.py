@@ -38,11 +38,11 @@ presets = {
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     },
-     "CygamesPictures": {
-        "first_frame_top_y_true": 780,                  # 最初のフレームの上端Y
-        "frame_height_true": 34,                      # 1コマの高さ
+    "CygamesPictures": {
+        "first_frame_top_y_true": 780,
+        "frame_height_true": 817/24,  # ≒ 34.041666666666664
         "cell_x_positions_true": {cell: 109 + 37 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 1128,
+        "column_offset_x": 1125,
         "true_width": 2340,
         "true_height": 3307,
         "default_book_koma": 4,
@@ -185,6 +185,14 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
         if tgt in cell_x_positions_true:
             book_x = cell_x_positions_true[tgt] + 0.8 * koma_width + 3 * scale_w
     return book_x
+
+# --- ドリフトしないY計算（秒線基準でリセット） ---
+def y_for_frame(top_y: int, n_frame: int, frame_h: float, fps: int = 24) -> int:
+    """n_frameコマ目の上端Yを、秒ごとにリセットして計算"""
+    sec, sub = divmod(n_frame, fps)                   # 何秒目か、秒内の何コマ目か
+    y_sec = int(round(top_y + sec * fps * frame_h))   # その秒の秒線Y
+    return int(round(y_sec + sub * frame_h))
+
 
 # =============== 本体 ===============
 def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, cell_labels=None, celllabel_koma=2):

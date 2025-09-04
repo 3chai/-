@@ -39,7 +39,7 @@ presets = {
         "default_celllabel_koma": 1
     },
     "CygamesPictures": {
-        "first_frame_top_y_true": 780,                  # 最初のフレームの上端Y
+        "first_frame_top_y_true": 779.5,                  # 最初のフレームの上端Y
         "frame_height_true": 33.93,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 109 + 37 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1125,

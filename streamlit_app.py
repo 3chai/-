@@ -40,7 +40,7 @@ presets = {
     },
     "CygamesPictures": {
         "first_frame_top_y_true": 778.5,                  # 最初のフレームの上端Y
-        "frame_height_true": 33.93,                      # 1コマの高さ
+        "frame_height_true": 33.95,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 109 + 36.8 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1168,
         "true_width": 2340,

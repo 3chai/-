@@ -38,7 +38,7 @@ presets = {
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     }
-     “CygamesPictures: {
+     “CygamesPictures": {
         "first_frame_top_y_true": 764,                  # 最初のフレームの上端Y
         "frame_height_true": 32,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 99 + 35 * offset for cell, offset in cell_offsets.items()},

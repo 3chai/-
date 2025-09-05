@@ -45,8 +45,8 @@ presets = {
         "column_offset_x": 1168,
         "true_width": 2340,
         "true_height": 3307,
-        "default_book_koma": 4,
-        "default_celllabel_koma": 1
+        "default_book_koma": 5,
+        "default_celllabel_koma": 2
     }
 }
 

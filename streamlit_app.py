@@ -319,9 +319,11 @@ TRIANGLE_FIXED_SIZE = 40   # 基準ピクセル（Andraft基準）。テンプ�
 TRIANGLE_FILL_ALPHA = 0       # 三角の塗りの不透明度（0% = 0）
 TRIANGLE_OUTLINE_ALPHA = 77  # 三角枠の不透明度（約50%）
 
-# 円の不透明度（塗りはデフォルト0%、枠はデフォルト50%）
+# 丸の固定サイズ設定（三角と揃える）
+CIRCLE_USE_FIXED  = True
+CIRCLE_FIXED_SIZE = 48
 CIRCLE_FILL_ALPHA = 0
-CIRCLE_OUTLINE_ALPHA = 128
+CIRCLE_OUTLINE_ALPHA = 128 # 円の不透明度（塗りはデフォルト0%、枠はデフォルト50%）
 
 # 囲み描画（数字の周りに丸/三角）
 ENC_PAD_BASE    = 0    # 文字と円の基本余白(px)
@@ -369,16 +371,22 @@ def draw_enclosure(draw, bbox, shape="circle", stroke=2,
         return
 
     # 真円（数字が横長でも半径に少し加算してキレイに収める）
-    extra = max(0, w - h) * ENC_GROWTH
-    extra = min(extra, ENC_MAX_EXTRA)
-
-    r = (h / 2.0) + ENC_PAD_BASE + (extra / 2.0)  # 半径
+    # --- circle（固定サイズ or 従来の自動） ---
     cx = (x1 + x2) / 2.0
     cy = (y1 + y2) / 2.0
+
+    if CIRCLE_USE_FIXED:
+        # 一定半径（三角に合わせて scale_h で拡縮）
+        r = (CIRCLE_FIXED_SIZE * scale_h) / 2.0
+    else:
+        extra = max(0, w - h) * ENC_GROWTH
+        extra = min(extra, ENC_MAX_EXTRA)
+        r = (h / 2.0) + ENC_PAD_BASE + (extra / 2.0)
+
     draw.ellipse(
         (cx - r, cy - r, cx + r, cy + r),
         fill=(0, 0, 0, circ_fill_alpha),
-        outline=(0, 0, 0, circ_outline_alpha),
+        outline=(0, 0, 0, circle_outline_alpha),
         width=stroke
     )
 

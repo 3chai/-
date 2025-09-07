@@ -9,10 +9,10 @@ CELLS_ALL = list(cell_offsets.keys())
 
 presets = {
     "Andraft": {
-        "first_frame_top_y_true": 1278.67,
-        "frame_height_true": 49.5,
-        "cell_x_positions_true": {cell: 110 + 55 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 1690,
+        "first_frame_top_y_true": 1279,
+        "frame_height_true": 49.6,
+        "cell_x_positions_true": {cell: 108 + 55.8 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1688,
         "true_width": 3508,
         "true_height": 4961,
         "default_book_koma": 6,
@@ -28,20 +28,20 @@ presets = {
         "default_book_koma": 5,
         "default_celllabel_koma": 0,
     },
-    "ぴえろ": {
-        "first_frame_top_y_true": 800,                  # 最初のフレームの上端Y
-        "frame_height_true": 27.5,                      # 1コマの高さ
+    "ぴえろ（マイルさん用）": {
+        "first_frame_top_y_true": 800,
+        "frame_height_true": 27.5,
         "cell_x_positions_true": {cell: 86 + 30.8 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 950.5,                         # 右カラムまでのXオフセット
+        "column_offset_x": 950.5,
         "true_width": 2026,
         "true_height": 2866,
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     },
     "CygamesPictures": {
-        "first_frame_top_y_true": 778.5,                  # 最初のフレームの上端Y
-        "frame_height_true": 33.98,                      # 1コマの高さ
-        "cell_x_positions_true": {cell: 109 + 36.8 * offset for cell, offset in cell_offsets.items()},
+        "first_frame_top_y_true": 780,
+        "frame_height_true": 33.98,
+        "cell_x_positions_true": {cell: 112 + 37.3 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1168,
         "true_width": 2340,
         "true_height": 3307,
@@ -49,7 +49,6 @@ presets = {
         "default_celllabel_koma": 2
     }
 }
-
 
 # =============== 位置調整の基準（Andraft基準） ===============
 BASE_FRAME_HEIGHT = 49.5
@@ -64,28 +63,156 @@ text_offset_y = 4
 
 BASE_BOOK_OFFSET_KOMA = 3
 
+# 数字の段階的縮小
+TWO_DIGIT_SCALE    = 0.85  # 例: 12
+THREE_PLUS_SCALE   = 0.7  # 例: 100, 240
+
+# ===== 数字の桁数別 位置補正（px相当；負=上/左, 正=下/右）=====
+NUM1_NUDGE_X = 0
+NUM1_NUDGE_Y = 0
+
+NUM2_NUDGE_X = 0
+NUM2_NUDGE_Y = 2
+
+NUM3PLUS_NUDGE_X = -5
+NUM3PLUS_NUDGE_Y = 5
+
+
+# ====== 英字付き(例: 1a/12a/108a)の桁数別スケール＆位置補正 ======
+ALPHA1_SCALE = 0.8   # 1a の基準スケール
+ALPHA2_SCALE = 0.7   # 12a の基準スケール
+ALPHA3PLUS_SCALE = 0.6  # 100a など
+
+# 負=上/左, 正=下/右（px相当をスケールに掛ける）
+ALPHA1_NUDGE_X = 5
+ALPHA1_NUDGE_Y = 6.5
+
+ALPHA2_NUDGE_X = 1.8
+ALPHA2_NUDGE_Y = 9
+
+ALPHA3PLUS_NUDGE_X = -1.8
+ALPHA3PLUS_NUDGE_Y = 10
+
+
+# --- 囲み描画の見た目（UIで上書き可） ---
+ENC_PAD_W = 10   # テキスト左右余白(px相当)
+ENC_PAD_H = 6    # テキスト上下余白(px相当)
+ENC_STROKE = 4   # 線の太さ(px相当)
+
 # セル名オフセット（px基準 → スケール）
-HEADER_X_NUDGE_PX      = 10   # 右に10px（負で左）
-HEADER_BOTTOM_NUDGE_PX = -80  # 下端基準から上に80px（負で上）
+HEADER_X_NUDGE_PX      = 10
+HEADER_BOTTOM_NUDGE_PX = -80
 
 # ○/●/〇 の専用縮小＆位置補正
-CIRCLE_SCALE   = 0.5   # 1.0=等倍。小さくしたいなら 0.5〜0.8 くらい
+CIRCLE_SCALE   = 0.5   # 1.0=等倍
 CIRCLE_NUDGE_X = 8     # px（正=右, 負=左）
-CIRCLE_NUDGE_Y = 14     # px（正=下,  負=上）
+CIRCLE_NUDGE_Y = 14    # px（正=下,  負=上）
 
 # フォント
 font_path    = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
 jp_font_path = os.path.join(os.path.dirname(__file__), "NotoSansJP-Regular.otf")
 base_font_size = int(12 / (1086 / 3508))
 
+# =============== まとめ入力パーサー ===============
+def parse_triangle_spec(s: str):
+    """
+    'A1, A10a, C24, 3, 5-7, 10a' などを一括で解釈。
+    戻り値: (triangle_cell_refs, triangle_alpha_tokens, triangle_numbers)
+      - triangle_cell_refs: {'A1', 'A10a', 'C24', ...}  ※セル優先
+      - triangle_alpha_tokens: {'10a', '7b', ...}       ※全セルで英字付き
+      - triangle_numbers: {3,5,6,7,...}                 ※全セルで数字のみ
+    """
+    cell_refs = set()
+    alpha_tokens = set()
+    numbers = set()
+
+    s = (s or "").strip()
+    if not s:
+        return cell_refs, alpha_tokens, numbers
+
+    for part in re.split(r"[,\u3001\s]+", s):
+        part = part.strip()
+        if not part:
+            continue
+
+        # セル指定（A-H + 数字 + 英字0/1）
+        m_cell = re.fullmatch(r"([A-Ha-h])\s*(\d+)\s*([a-zA-Z]?)", part)
+        if m_cell:
+            c = m_cell.group(1).upper()
+            n = m_cell.group(2)
+            suf = m_cell.group(3).lower()
+            cell_refs.add(f"{c}{n}{suf}")
+            continue
+
+        # 数字レンジ 5-12 / 12-5
+        m_rng = re.fullmatch(r"(\d+)\s*-\s*(\d+)", part)
+        if m_rng:
+            a, b = int(m_rng.group(1)), int(m_rng.group(2))
+            if a <= b:
+                numbers.update(range(a, b+1))
+            else:
+                numbers.update(range(b, a+1))
+            continue
+
+        # 英字付き token (10a など)
+        m_alpha = re.fullmatch(r"(\d+)([a-zA-Z])", part)
+        if m_alpha:
+            n = m_alpha.group(1)
+            suf = m_alpha.group(2).lower()
+            alpha_tokens.add(f"{n}{suf}")
+            continue
+
+        # 純数字
+        if part.isdigit():
+            numbers.add(int(part))
+            continue
+
+    return cell_refs, alpha_tokens, numbers
+
 # =============== ユーティリティ ===============
+def parse_mixed_triangle_targets(s: str):
+    """
+    例:
+      "1, 4-6, 24, 10a,7b，12C"
+      -> ( {1,4,5,6,24}, {"10a","7b","12C"} )
+    ・数字は範囲対応 (a-b)
+    ・英字付き(10aなど)はトークン単位。範囲は非対応
+    """
+    nums = set()
+    alnum = set()
+    s = (s or "").strip()
+    if not s:
+        return nums, alnum
+
+    for part in re.split(r"[,\u3001]", s):
+        part = part.strip()
+        if not part:
+            continue
+
+        m_rng = re.fullmatch(r"(\d+)\s*-\s*(\d+)", part)
+        if m_rng:
+            a, b = int(m_rng.group(1)), int(m_rng.group(2))
+            if a <= b:
+                nums.update(range(a, b+1))
+            else:
+                nums.update(range(b, a+1))
+            continue
+
+        m_num      = re.fullmatch(r"\d+", part)
+        m_numalpha = re.fullmatch(r"\d+[a-zA-Z]", part)
+        if m_num:
+            nums.add(int(part))
+        elif m_numalpha:
+            alnum.add(part)
+
+    return nums, alnum
+
 def clean_frame_column(series):
     series = series.astype(str).str.strip().map(lambda x: unicodedata.normalize("NFKC", x))
     series = pd.to_numeric(series, errors='coerce')
     return series
 
 def normalize_for_vertical(text: str) -> str:
-    # セル名の縦書き用：横棒を縦棒に
     return (text
             .replace("ー", "｜").replace("ｰ", "｜")
             .replace("－", "｜").replace("―", "｜")
@@ -104,7 +231,6 @@ def read_csv_flexibly(file_bytes):
         return pd.DataFrame()
 
 def preprocess_cells(df_raw, valid_cells):
-    # 各列の最初の空白だけ × を入れる（列が完全空欄なら何もしない）
     for cell in valid_cells:
         if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
             continue
@@ -120,7 +246,6 @@ def preprocess_cells(df_raw, valid_cells):
     return df_raw
 
 def get_book_positions(df, valid_cells):
-    # _book列の左右の A〜H を見て、before/between/after を決める
     cols = list(df.columns)
     book_cols = [c for c in cols if re.match(r"^_?book\d+$", str(c), re.IGNORECASE)]
     positions = {}
@@ -151,7 +276,6 @@ def is_filled(v):
     s = norm_str(v)
     return s not in ("", "nan", "None")
 
-# 縦書き（セル名・下揃え）
 def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
     if not text:
         return
@@ -179,7 +303,6 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
         if len(parts) == 3:
             _, left, right = parts
             if left in cell_x_positions_true and right in cell_x_positions_true:
-                # 全間で統一：左セル中心 + 0.8コマ + 1px相当
                 book_x = cell_x_positions_true[left] + 0.8 * koma_width + 3 * scale_w
     elif pos.startswith("after_"):
         tgt = pos.replace("after_", "")
@@ -187,16 +310,104 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
             book_x = cell_x_positions_true[tgt] + 0.8 * koma_width + 3 * scale_w
     return book_x
 
-# --- ドリフトしないY計算（秒線基準でリセット） ---
+# 三角の見た目調整
+TRIANGLE_NUDGE_Y = -0.9  # 負=上、正=下（px）
+TRIANGLE_BASE_W_SCALE = 1.2
+TRIANGLE_HEIGHT_SCALE = 1
+TRIANGLE_USE_FIXED = True  # Trueで三角の大きさを一定にする
+TRIANGLE_FIXED_SIZE = 40   # 基準ピクセル（Andraft基準）。テンプレートに合わせ scale_h で拡大縮小
+TRIANGLE_FILL_ALPHA = 0       # 三角の塗りの不透明度（0% = 0）
+TRIANGLE_OUTLINE_ALPHA = 77  # 三角枠の不透明度（約50%）
+
+# 円の不透明度（塗りはデフォルト0%、枠はデフォルト50%）
+CIRCLE_FILL_ALPHA = 0
+CIRCLE_OUTLINE_ALPHA = 128
+
+# 囲み描画（数字の周りに丸/三角）
+ENC_PAD_BASE    = 0    # 文字と円の基本余白(px)
+ENC_GROWTH      = 0.53 # 横が縦より大きい時の増量係数
+ENC_MAX_EXTRA   = 30   # 増量の上限(px)
+
+def draw_enclosure(draw, bbox, shape="circle", stroke=2,
+                   tri_outline_alpha=TRIANGLE_OUTLINE_ALPHA,
+                   circ_outline_alpha=CIRCLE_OUTLINE_ALPHA,
+                   tri_fill_alpha=TRIANGLE_FILL_ALPHA,
+                   circ_fill_alpha=CIRCLE_FILL_ALPHA,
+                   scale_w=1.0, scale_h=1.0):
+    """
+    bbox: テキストの描画境界 (x1,y1,x2,y2)
+    shape: "circle" or "triangle"
+    """
+    x1, y1, x2, y2 = bbox
+    w = x2 - x1
+    h = y2 - y1
+
+    if shape == "triangle":
+        # 二等辺三角形（上向き）
+        cx = (x1 + x2) / 2.0
+        cy = (y1 + y2) / 2.0
+
+        if TRIANGLE_USE_FIXED:
+            # 一定サイズ（三角の見た目を安定させる）。高さと底辺は固定サイズを基準に scale_h を掛ける。
+            height = TRIANGLE_FIXED_SIZE * scale_h * TRIANGLE_HEIGHT_SCALE
+            base_half = (TRIANGLE_FIXED_SIZE * TRIANGLE_BASE_W_SCALE * scale_h) / 2.0
+            top_y = cy - height / 2.0
+            bottom_y = cy + height / 2.0
+        else:
+            # 従来：テキストbboxに追従（数値が長いと横に広がる）
+            w = x2 - x1
+            h = y2 - y1
+            base_half = (w / 2.0) * TRIANGLE_BASE_W_SCALE
+            top_y = y2 - h * TRIANGLE_HEIGHT_SCALE
+            bottom_y = y2
+
+        pts = [(cx, top_y), (cx - base_half, bottom_y), (cx + base_half, bottom_y)]
+        # polygon による塗り（既定は透明）
+        draw.polygon(pts, fill=(0, 0, 0, tri_fill_alpha))
+        # 枠線（不透明度指定）
+        draw.line(pts + [pts[0]], fill=(0, 0, 0, tri_outline_alpha), width=stroke, joint="curve")
+        return
+
+    # 真円（数字が横長でも半径に少し加算してキレイに収める）
+    extra = max(0, w - h) * ENC_GROWTH
+    extra = min(extra, ENC_MAX_EXTRA)
+
+    r = (h / 2.0) + ENC_PAD_BASE + (extra / 2.0)  # 半径
+    cx = (x1 + x2) / 2.0
+    cy = (y1 + y2) / 2.0
+    draw.ellipse(
+        (cx - r, cy - r, cx + r, cy + r),
+        fill=(0, 0, 0, circ_fill_alpha),
+        outline=(0, 0, 0, circ_outline_alpha),
+        width=stroke
+    )
+
+# --- ドリフトしないY計算（保険用） ---
 def y_for_frame(top_y: int, n_frame: int, frame_h: float, fps: int = 24) -> int:
-    """n_frameコマ目の上端Yを、秒ごとにリセットして計算"""
-    sec, sub = divmod(n_frame, fps)                   # 何秒目か、秒内の何コマ目か
-    y_sec = int(round(top_y + sec * fps * frame_h))   # その秒の秒線Y
+    sec, sub = divmod(n_frame, fps)
+    y_sec = int(round(top_y + sec * fps * frame_h))
     return int(round(y_sec + sub * frame_h))
 
-
 # =============== 本体 ===============
-def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, cell_labels=None, celllabel_koma=2):
+def generate_timesheet(
+    file_bytes,
+    preset,
+    show_books=True,
+    book_offset_koma=6,
+    cell_labels=None,
+    celllabel_koma=2,
+    target_cell_for_enclose="A",
+    mixed_triangle_str="",
+    enc_pad_w=ENC_PAD_W,
+    enc_pad_h=ENC_PAD_H,
+    enc_stroke=ENC_STROKE,
+    triangle_outline_alpha=TRIANGLE_OUTLINE_ALPHA,
+    circle_outline_alpha=CIRCLE_OUTLINE_ALPHA,
+    alpha_all_triangle=False,
+):
+    # 入力一発 → セル参照・英字付きトークン・数字セットに分解
+    triangle_cell_refs, triangle_alpha_tokens, triangle_numbers = parse_triangle_spec(mixed_triangle_str)
+
     # プリセット
     true_width = preset["true_width"]; true_height = preset["true_height"]
     frame_height_true = preset["frame_height_true"]
@@ -228,9 +439,8 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     # フォント
     font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
     font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
-    # ○/●/〇専用フォント（縮小）
     font_circle = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * CIRCLE_SCALE))
-    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))  # book
+    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))
     try:
         cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.6 * scale_h))
     except Exception:
@@ -257,7 +467,6 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
     total_pages = math.ceil(max_frame / frames_per_page)
     last_frame_global = max_frame
     result_images = []
-
     cell_labels = cell_labels or {}
 
     for page in range(total_pages):
@@ -291,7 +500,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     spacing=glyph_spacing
                 )
 
-        # ---- 通常セル ----
+        # ---- 通常セル（丸/三角 囲み対応）----
         for cell in valid_cells:
             x_base = cell_x_positions_true[cell]
             for _, row in df_page.iterrows():
@@ -304,7 +513,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 x = x_base if col_block==0 else x_base + column_offset_x
                 y_draw = y + text_offset_y
 
-                # 記号の位置＆フォント
+                # 記号の扱い
                 if timing in ('●','○','〇'):
                     x += circle_offset_x + (CIRCLE_NUDGE_X * scale_w)
                     y_draw += circle_offset_y + (CIRCLE_NUDGE_Y * scale_h)
@@ -312,12 +521,96 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 elif timing == '×':
                     x += cross_offset_x
                     font = font_large
-                elif re.match(r"^\d+[a-zA-Z]$", timing) or re.fullmatch(r"\d{2,}", timing):
-                    x += alphabet_offset_x
-                    font = font_large if len(timing) < 3 else font_small
                 else:
-                    font = font_small if len(timing) >= 3 else font_large
+                    # 文字種別でフォントとスケールを決定し、桁数別の補正を適用
+                    m_num_alpha = re.fullmatch(r"(\d+)([a-zA-Z])", timing)  # 10a
+                    m_digits    = re.fullmatch(r"\d+", timing)              # 12, 108 など
 
+                    if m_num_alpha:
+                        # 英字付き（例：10a）。数字部分の桁数で細かく最適化
+                        digit_part = m_num_alpha.group(1)   # "10"
+                        nlen = len(digit_part)
+
+                        if nlen == 1:
+                            scale = ALPHA1_SCALE
+                            nx, ny = ALPHA1_NUDGE_X, ALPHA1_NUDGE_Y
+                        elif nlen == 2:
+                            scale = ALPHA2_SCALE
+                            nx, ny = ALPHA2_NUDGE_X, ALPHA2_NUDGE_Y
+                        else:
+                            scale = ALPHA3PLUS_SCALE
+                            nx, ny = ALPHA3PLUS_NUDGE_X, ALPHA3PLUS_NUDGE_Y
+
+                        font = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * scale))
+
+                        # 既存の横位置微調整は活かす（文字詰まり防止）
+                        x += alphabet_offset_x
+                        # 桁数別の最終補正
+                        x += nx * scale_w
+                        y_draw += ny * scale_h
+
+                    elif m_digits:
+                        nlen = len(timing)
+                        if nlen == 1:
+                            font = font_large
+                            nx, ny = NUM1_NUDGE_X, NUM1_NUDGE_Y
+                        elif nlen == 2:
+                            scale = TWO_DIGIT_SCALE
+                            font = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * scale))
+                            x += alphabet_offset_x * 0.6
+                            nx, ny = NUM2_NUDGE_X, NUM2_NUDGE_Y
+                        else:
+                            scale = THREE_PLUS_SCALE
+                            font = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * scale))
+                            x += alphabet_offset_x * 0.6
+                            nx, ny = NUM3PLUS_NUDGE_X, NUM3PLUS_NUDGE_Y
+                        x += nx * scale_w
+                        y_draw += ny * scale_h
+                    else:
+                        font = font_small if len(timing) >= 3 else font_large
+
+                # ===== 囲み（全セル対象：セル指定 > 英字付きtoken > 数字のみ の優先順）=====
+                m_lead = re.match(r"\s*(\d+)([a-zA-Z]?)", timing)  # 先頭の「数字(+任意の英字1文字)」
+                if m_lead:
+                    num_text = m_lead.group(1)           # '12'
+                    suffix   = m_lead.group(2).lower()   # 'a' or ''
+                    token    = f"{num_text}{suffix}"     # '12a' or '12'
+                    cell_tok = f"{cell}{token}"          # 例: 'A12a'
+
+                    # --- 三角の判定（優先度：セル指定 > 英字付きtoken > 数字のみ） ---
+                    is_triangle = (
+                        (cell_tok in triangle_cell_refs) or
+                        (suffix and (alpha_all_triangle or (token in triangle_alpha_tokens))) or
+                        ((not suffix) and (int(num_text) in triangle_numbers))
+                    )
+
+                    # トークン全体（数字 + 任意の英字1文字）の bbox を取得
+                    # suffix が空でも token は num_text と同じなのでそのまま使える
+                    token_bbox = draw.textbbox((x, y_draw), token, font=font)
+
+                    pad_w = enc_pad_w * scale_w
+                    pad_h = enc_pad_h * scale_h
+                    dy = (TRIANGLE_NUDGE_Y * scale_h) if is_triangle else 0
+
+                    ebbox = (
+                        token_bbox[0] - pad_w,
+                        token_bbox[1] - pad_h + dy,
+                        token_bbox[2] + pad_w,
+                        token_bbox[3] + pad_h + dy
+                    )
+                    stroke_px = max(1, int(enc_stroke * scale_w))
+                    draw_enclosure(
+                        draw, ebbox,
+                        shape=('triangle' if is_triangle else 'circle'),
+                        stroke=stroke_px,
+                        tri_outline_alpha=triangle_outline_alpha,
+                        circ_outline_alpha=circle_outline_alpha,
+                        tri_fill_alpha=TRIANGLE_FILL_ALPHA,
+                        circ_fill_alpha=CIRCLE_FILL_ALPHA,
+                        scale_w=scale_w, scale_h=scale_h
+                    )
+
+                # テキストを最後に描画
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
 
         # ---- book マーカー（行内共有の重なり回避／枠は飾り）----
@@ -335,16 +628,14 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 row_y_base = first_frame_top_y_true + row_pos*frame_height_true
                 col_x_offset = column_offset_x if col_block==1 else 0
 
-                # その行でbook値が入っている列を位置ごとに集約
                 present = {}
-                for book_col, pos in book_positions.items():
+                for book_col, pos in get_book_positions(df, valid_cells).items():
                     cname = norm_str(book_col)
                     if (cname in row.index) and is_filled(row[cname]):
                         present.setdefault(pos, []).append(cname)
 
-                placed_boxes_row = []  # 行内で共有（パディング込み矩形）
+                placed_boxes_row = []
 
-                # 位置→xを先に出して、x順に処理（安定）
                 entries = []
                 for pos, books_here in present.items():
                     bx = calc_book_x(pos, cell_x_positions_true, koma_width, scale_w)
@@ -356,7 +647,6 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     base_line_top    = y_ref - 4*scale_h
                     base_line_bottom = y_ref + (frame_height_true*2) + 2*scale_h
 
-                    # 若い番号→上
                     items = []
                     for b in books_here:
                         s = norm_str(b).replace("_","")
@@ -377,18 +667,15 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                         return not (ax2<=bx1 or bx2<=ax1 or ay2<=by1 or by2<=ay1)
 
                     for idx_item, (_, label) in enumerate(items):
-                        # 基準の理論サイズ
                         bbox0 = draw.textbbox((0, 0), label, font=label_font)
                         lw = bbox0[2] - bbox0[0]
                         lh = bbox0[3] - bbox0[1]
 
-                        # 基準位置（若番ほど上）
                         base_y = (base_line_top - lh - 2*scale_h) - idx_item * (lh + line_gap)
                         lx_center = book_x - (lw / 2)
                         ly = base_y
                         lx = max(margin, min(true_width - margin - lw, lx_center))
 
-                        # 実座標で bbox を取り直して衝突回避（枠パディング込み）
                         while True:
                             bbox_at = draw.textbbox((lx, ly), label, font=label_font)
                             cur_padded = (
@@ -402,19 +689,12 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                                 break
                             ly -= (lh + line_gap + extra_shift)
 
-                        # テキスト描画
                         draw.text((lx, ly), label, fill=(0,0,0,255), font=label_font)
-                        # 枠（塗りなし）
                         draw.rectangle([cur_padded[0], cur_padded[1], cur_padded[2], cur_padded[3]],
-                                       outline=(0,0,0,255), width=BOX_OUTLINE_W)
-
-                        # 当たり判定に追加（枠サイズ）
+                                       outline=(0,0,0,255), width=max(1, int(1.5*scale_w)))
                         placed_boxes_row.append(cur_padded)
-
-                        # 線の起点（最下段の底）
                         bottom_label_bottom = max(bottom_label_bottom or cur_padded[3], cur_padded[3])
 
-                    # ラベル直下から線（最下段ラベルに追従）
                     pad_top = 2 * scale_h
                     line_top = (bottom_label_bottom + pad_top) if bottom_label_bottom is not None else base_line_top
                     extra_len = frame_height_true * max(0, book_offset_koma - BASE_BOOK_OFFSET_KOMA)
@@ -422,8 +702,7 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                     line_w = max(1, int(2*scale_w))
                     draw.line([(book_x, line_top), (book_x, line_bottom)], fill=(0,0,0,255), width=line_w)
 
-        # ---- 黒バー（全体の最後のフレーム位置にのみ描画）----
-        # いまのページが最終ページなら描画する
+        # ---- 黒バー（全体の最後のフレーム位置のみ）----
         if page == total_pages - 1:
             idx_last = (last_frame_global - 1) % frames_per_page
             col_last = idx_last // 72
@@ -440,17 +719,14 @@ def generate_timesheet(file_bytes, preset, show_books=True, book_offset_koma=6, 
                 ],
                 fill=(0, 0, 0, 128)
             )
-    
 
         result_images.append(img)
 
     return result_images, max_frame
 
-
 # =============== UI（CSSでサイズ調整） ===============
 st.markdown("""
     <style>
-    /* タイトルを小さく＆はみ出し防止 */
     .stApp h1 {
         font-size: 1.35rem !important;
         line-height: 1.3 !important;
@@ -459,13 +735,11 @@ st.markdown("""
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    /* テキスト入力系をコンパクトに（セル名用） */
     input[type="text"] {
         font-size: 0.8rem !important;
         height: 1.8rem !important;
         padding: 0 6px !important;
     }
-    /* セクション見出しもちょい小さく */
     .stMarkdown h3, .stMarkdown h2 {
         font-size: 1rem !important;
         margin: 0.4rem 0 !important;
@@ -473,7 +747,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("ちゃいむしーと Web版 v3.1.1")
+st.title("ちゃいむしーと Web版 v4")
 
 # プリセット選択
 selected_preset = st.selectbox("会社プリセット", list(presets.keys()))
@@ -490,6 +764,23 @@ with c2:
     book_offset_koma = st.slider("Bookの高さ（何コマ上）", 0, 12, int(default_book_koma), 1)
 with c3:
     celllabel_koma = st.slider("セル名の高さ（何コマ上）", 0, 6, int(default_celllabel_koma), 1)
+
+# 丸/三角設定（入力はひとつだけ）
+with st.expander("原画番号の丸/参考設定", expanded=True):
+    # 例: A1, A10a, C24, 3, 5-7, 10a
+    triangle_spec_str = st.text_input(
+        "参考にする指定（A1,A6,A10a,コンマで区切る）",
+        value=""
+    )
+
+    # 英字付き（例: 10a, 7b）は全て参考にする
+    alpha_all_triangle = st.checkbox("英字付き(例: 10a, 7b)はすべて参考にする", value=True)
+
+    # 不透明度（％）スライダー → 0〜255 に変換（枠のみ）
+    tri_alpha_pct  = st.slider("三角の枠の不透明度(%)", 0, 100, int(round(TRIANGLE_OUTLINE_ALPHA * 100 / 255)))
+    circ_alpha_pct = st.slider("丸の枠の不透明度(%)", 0, 100, int(round(CIRCLE_OUTLINE_ALPHA   * 100 / 255)))
+    triangle_outline_alpha = int(round(tri_alpha_pct  * 255 / 100))
+    circle_outline_alpha   = int(round(circ_alpha_pct * 255 / 100))
 
 # セル名入力（1ページ目・縦書き）
 with st.expander("セル名（A〜H）を入力（縦書き・1ページ目のみ / 日本語OK）", expanded=True):
@@ -510,7 +801,11 @@ if uploaded_file is not None:
             show_books=show_books,
             book_offset_koma=book_offset_koma,
             cell_labels=cell_labels,
-            celllabel_koma=celllabel_koma
+            celllabel_koma=celllabel_koma,
+            mixed_triangle_str=triangle_spec_str,   # ← 入力ひとつを渡す（UIのテキストボックス値）
+            triangle_outline_alpha=triangle_outline_alpha,
+            circle_outline_alpha=circle_outline_alpha,
+            alpha_all_triangle=alpha_all_triangle,
         )
         if not pages:
             st.warning("有効なFrameデータが見つかりませんでした。")

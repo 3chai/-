@@ -39,8 +39,8 @@ presets = {
         "default_celllabel_koma": 1
     },
     "ぴえろ(ウーカタさん用）": {
-        "first_frame_top_y_true": 593,                  # 最初のフレームの上端Y
-        "frame_height_true": 20.96,                      # 1コマの高さ
+        "first_frame_top_y_true": 591,                  # 最初のフレームの上端Y
+        "frame_height_true": 20.98,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 58 + 23.3 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 723,                         # 右カラムまでのXオフセット
         "true_width": 1518,
@@ -67,7 +67,7 @@ BASE_CIRCLE_OFFSET_X = -5
 BASE_CIRCLE_OFFSET_Y = -2
 BASE_ALPHABET_OFFSET_X = -13
 BASE_CROSS_OFFSET_X = -5
-BASE_CROSS_OFFSET_Y = -2
+BASE_CROSS_OFFSET_Y = -1
 BASE_BAR_WIDTH = 1620
 BASE_BAR_SHIFT_X = 88
 text_offset_y = 4

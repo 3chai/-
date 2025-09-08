@@ -38,6 +38,16 @@ presets = {
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     },
+    "ぴえろ(ウーカタさん用）": {
+        "first_frame_top_y_true": 593,                  # 最初のフレームの上端Y
+        "frame_height_true": 20.96,                      # 1コマの高さ
+        "cell_x_positions_true": {cell: 58 + 23.3 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 723,                         # 右カラムまでのXオフセット
+        "true_width": 1518,
+        "true_height": 2150,
+        "default_book_koma": 4,
+        "default_celllabel_koma": 1
+    },
     "CygamesPictures": {
         "first_frame_top_y_true": 780,
         "frame_height_true": 33.98,
@@ -56,7 +66,8 @@ BASE_WIDTH = 3508
 BASE_CIRCLE_OFFSET_X = -5
 BASE_CIRCLE_OFFSET_Y = -2
 BASE_ALPHABET_OFFSET_X = -13
-BASE_CROSS_OFFSET_X = -6
+BASE_CROSS_OFFSET_X = -5
+BASE_CROSS_OFFSET_Y = -2
 BASE_BAR_WIDTH = 1620
 BASE_BAR_SHIFT_X = 88
 text_offset_y = 4
@@ -106,7 +117,7 @@ HEADER_BOTTOM_NUDGE_PX = -80
 # ○/●/〇 の専用縮小＆位置補正
 CIRCLE_SCALE   = 0.5   # 1.0=等倍
 CIRCLE_NUDGE_X = 8     # px（正=右, 負=左）
-CIRCLE_NUDGE_Y = 14    # px（正=下,  負=上）
+CIRCLE_NUDGE_Y = 10    # px（正=下,  負=上）
 
 # フォント
 font_path    = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
@@ -431,6 +442,7 @@ def generate_timesheet(
     circle_offset_y = BASE_CIRCLE_OFFSET_Y * scale_h
     alphabet_offset_x = BASE_ALPHABET_OFFSET_X * scale_w
     cross_offset_x = BASE_CROSS_OFFSET_X * scale_w
+    cross_offset_y = BASE_CROSS_OFFSET_Y * scale_h
     bar_width = BASE_BAR_WIDTH * scale_w
     bar_shift_x = BASE_BAR_SHIFT_X * scale_w
 
@@ -528,6 +540,7 @@ def generate_timesheet(
                     font = font_circle
                 elif timing == '×':
                     x += cross_offset_x
+                    y_draw += cross_offset_y
                     font = font_large
                 else:
                     # 文字種別でフォントとスケールを決定し、桁数別の補正を適用

@@ -51,7 +51,7 @@ presets = {
     "CygamesPictures": {
         "first_frame_top_y_true": 780,
         "frame_height_true": 33.98,
-        "cell_x_positions_true": {cell: 112 + 37.3 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 110 + 37.3 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1168,
         "true_width": 2340,
         "true_height": 3307,

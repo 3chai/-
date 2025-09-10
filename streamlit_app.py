@@ -303,6 +303,7 @@ def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
         y += h + spacing
 
 # book X座標（before/between/after）
+
 def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
     book_x = None
     if pos.startswith("before_"):
@@ -320,6 +321,57 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
         if tgt in cell_x_positions_true:
             book_x = cell_x_positions_true[tgt] + 0.8 * koma_width + 3 * scale_w
     return book_x
+
+# ---- 追加：判定＆描画ユーティリティ（ギャップ用） ----
+def is_number_or_alnum(s: str) -> bool:
+    """'12' や '10a' のような先頭が数字で英字1文字までのパターンを判定"""
+    return bool(re.fullmatch(r"\d+([a-zA-Z])?", s.strip()))
+
+def build_gap_markers(df: pd.DataFrame, valid_cells, threshold: int = 4):
+    """
+    各セル列について、連続する“非空”同士のギャップが threshold 以上なら
+    直前のフレーム位置にマーカーを付ける。
+      - 直前値が '×' -> 'wavy'（波線）
+      - 直前値が 数字 or 数字+英字 -> 'straight'（直線）
+    戻り値: { (cell, frame): 'wavy' | 'straight', ... }
+    """
+    markers = {}
+    # フレーム順に並べておく
+    df_sorted = df.sort_values('Frame')
+    for cell in valid_cells:
+        col = df_sorted[['Frame', cell]].copy()
+        # 非空のみ（空白/NaNは除外）
+        col['val'] = col[cell].astype(str).map(lambda x: x.strip())
+        nonempty = col[col['val'] != ""]
+        frames = nonempty['Frame'].tolist()
+        vals   = nonempty['val'].tolist()
+        for i in range(len(frames) - 1):
+            f_cur, f_next = frames[i], frames[i+1]
+            gap = (f_next - f_cur - 1)
+            if gap >= threshold:
+                v = vals[i]
+                if v == '×':
+                    markers[(cell, int(f_cur))] = 'wavy'
+                elif is_number_or_alnum(v):
+                    markers[(cell, int(f_cur))] = 'straight'
+                # それ以外は何もしない
+    return markers
+
+def draw_wavy_vertical(draw: ImageDraw.ImageDraw, cx: float, y_top: float, y_bottom: float,
+                       amplitude: float, period_px: float, stroke: int):
+    """
+    縦に伸びる波線を描く（サイン波）。peak-to-peak で 2*amplitude。
+    """
+    import math
+    pts = []
+    y = y_top
+    step = max(2.0, period_px / 12.0)  # なめらかさ
+    while y <= y_bottom:
+        x = cx + amplitude * math.sin(2 * math.pi * (y - y_top) / period_px)
+        pts.append((x, y))
+        y += step
+    if len(pts) >= 2:
+        draw.line(pts, fill=(0, 0, 0, 255), width=stroke)
 
 # 三角の見た目調整
 TRIANGLE_NUDGE_Y = -0.9  # 負=上、正=下（px）
@@ -480,6 +532,8 @@ def generate_timesheet(
 
     valid_cells = [c for c in CELLS_ALL if c in df.columns]
     df = preprocess_cells(df, valid_cells)
+    # ★ ギャップ判定（全体で一度だけ）
+    gap_markers = build_gap_markers(df, valid_cells, threshold=4)
     book_positions = get_book_positions(df, valid_cells)
 
     max_frame = df['Frame'].max()
@@ -633,6 +687,28 @@ def generate_timesheet(
 
                 # テキストを最後に描画
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
+
+                # ==== 直後 4コマ以上のギャップがある場合の補助線（2コマ分） ====
+                mark_kind = gap_markers.get((cell, frame))
+                if mark_kind in ('wavy', 'straight'):
+                    # テキストの bbox 中心を線の中心Xにする（見た目が自然）
+                    tb = draw.textbbox((x, y_draw), timing, font=font)
+                    cx = (tb[0] + tb[2]) / 2.0
+                    # 線の開始を「文字の次のコマ」からにする
+                    y_top = y + frame_height_true
+                    y_bottom = y_top + frame_height_true * 4.0  # 次のコマから 2コマ分
+
+                    stroke_px = max(1, int(3 * scale_w))
+
+                    if mark_kind == 'wavy':
+                        # 幅：コマ半分（peak-to-peak = 0.5コマ → 振幅は 0.25コマ）
+                        amp = 0.08 * (cell_x_positions_true.get('B', 0) - cell_x_positions_true.get('A', 0) or koma_width)
+                        # period は 2/3 コマぐらいで軽く波打つ
+                        period = frame_height_true * 0.75
+                        draw_wavy_vertical(draw, cx, y_top, y_bottom, amplitude=amp, period_px=period, stroke=stroke_px)
+                    else:
+                        # 直線
+                        draw.line([(cx, y_top), (cx, y_bottom)], fill=(0, 0, 0, 255), width=stroke_px)
 
         # ---- book マーカー（行内共有の重なり回避／枠は飾り）----
         if show_books:

@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import math, re, io, os, unicodedata, zipfile
+from typing import Optional
 
 # =============== 基本定義 ===============
 cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
@@ -49,14 +50,24 @@ presets = {
         "default_celllabel_koma": 1
     },
     "CygamesPictures": {
-        "first_frame_top_y_true": 780,
-        "frame_height_true": 33.98,
-        "cell_x_positions_true": {cell: 110 + 37.3 * offset for cell, offset in cell_offsets.items()},
+        "first_frame_top_y_true": 779,
+        "frame_height_true": 33.98 ,
+        "cell_x_positions_true": {cell: 108.5 + 37.2 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1168,
         "true_width": 2340,
         "true_height": 3307,
-        "default_book_koma": 5,
+        "default_book_koma": 6,
         "default_celllabel_koma": 2
+    },
+    "東映アニメーション": {
+        "first_frame_top_y_true": 666,
+        "frame_height_true": 35.75,
+        "cell_x_positions_true": {cell: 94.5 + 41.5 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1153,
+        "true_width": 2338,
+        "true_height": 3306,
+        "default_book_koma": 5,
+        "default_celllabel_koma": 1
     }
 }
 
@@ -302,6 +313,22 @@ def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
         draw.text((bottom_x - w/2.0, y), ch, fill=(0,0,0,255), font=font)
         y += h + spacing
 
+# 縦書きテキストの総高さを測る（文字間隔含む）
+def vertical_text_total_height(draw, text, font, spacing=0):
+    if not text:
+        return 0
+    text = normalize_for_vertical(text)
+    total_h = 0
+    count = 0
+    for ch in text:
+        bbox = draw.textbbox((0, 0), ch, font=font)
+        h = (bbox[3] - bbox[1])
+        total_h += h
+        count += 1
+    if count > 1:
+        total_h += spacing * (count - 1)
+    return total_h
+
 # book X座標（before/between/after）
 
 def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
@@ -327,34 +354,71 @@ def is_number_or_alnum(s: str) -> bool:
     """'12' や '10a' のような先頭が数字で英字1文字までのパターンを判定"""
     return bool(re.fullmatch(r"\d+([a-zA-Z])?", s.strip()))
 
-def build_gap_markers(df: pd.DataFrame, valid_cells, threshold: int = 4):
+def build_gap_markers(df: pd.DataFrame, valid_cells, threshold: int = 4, last_frame: Optional[int] = None):
     """
-    各セル列について、連続する“非空”同士のギャップが threshold 以上なら
-    直前のフレーム位置にマーカーを付ける。
-      - 直前値が '×' -> 'wavy'（波線）
-      - 直前値が 数字 or 数字+英字 -> 'straight'（直線）
-    戻り値: { (cell, frame): 'wavy' | 'straight', ... }
+    各セル列について、連続する非空同士のギャップが threshold 以上なら
+    直前のフレームにマーカーを付ける。
+      - 直前値が '×' -> kind='wavy'
+      - 直前値が 数字 or 数字+英字 -> kind='straight'
+    さらに、列の「最後の非空」から end（last_frame）までの空白が threshold 以上なら
+    その最後の非空にもマーカーを付ける（終端補正）。
+
+    返り値: { (cell, frame): (kind, run_len, is_tail) }
+       run_len は、その frame を含む直前の連続区間の長さ。
+       is_tail は、その frame が列内の最後の非空（終端ギャップ）なら True、途中ギャップなら False。
     """
     markers = {}
-    # フレーム順に並べておく
     df_sorted = df.sort_values('Frame')
+    end_frame = int(last_frame) if last_frame is not None else int(df_sorted['Frame'].max())
+
     for cell in valid_cells:
         col = df_sorted[['Frame', cell]].copy()
-        # 非空のみ（空白/NaNは除外）
         col['val'] = col[cell].astype(str).map(lambda x: x.strip())
         nonempty = col[col['val'] != ""]
-        frames = nonempty['Frame'].tolist()
+        frames = nonempty['Frame'].astype(int).tolist()
         vals   = nonempty['val'].tolist()
-        for i in range(len(frames) - 1):
-            f_cur, f_next = frames[i], frames[i+1]
+        if not frames:
+            continue
+
+        # 数字/英字付きのみカウント（×や記号は除外）
+        is_straight_val = [is_number_or_alnum(v) for v in vals]
+        total_straight_frames = sum(1 for ok in is_straight_val if ok)
+
+        # 連続区間を抽出（フレーム番号が1刻みの塊）
+        groups = []  # [(start_idx, end_idx)]  end_idx は inclusive
+        start = 0
+        for i in range(1, len(frames)):
+            if frames[i] != frames[i-1] + 1 or vals[i] != vals[i-1]:
+                groups.append((start, i-1))
+                start = i
+        groups.append((start, len(frames)-1))
+
+        # 中間ギャップ（途中）
+        for gi in range(len(groups) - 1):
+            s, e = groups[gi]
+            s2, e2 = groups[gi+1]
+            f_cur = frames[e]
+            v_cur = vals[e]
+            f_next = frames[s2]
             gap = (f_next - f_cur - 1)
             if gap >= threshold:
-                v = vals[i]
-                if v == '×':
-                    markers[(cell, int(f_cur))] = 'wavy'
-                elif is_number_or_alnum(v):
-                    markers[(cell, int(f_cur))] = 'straight'
-                # それ以外は何もしない
+                run_len = (e - s + 1)
+                if v_cur == '×':
+                    markers[(cell, f_cur)] = ('wavy', run_len, False, total_straight_frames)
+                elif is_number_or_alnum(v_cur):
+                    markers[(cell, f_cur)] = ('straight', run_len, False, total_straight_frames)
+        # 終端ギャップ（最後の非空 -> end_frame）
+        s_last, e_last = groups[-1]
+        last_f = frames[e_last]
+        last_v = vals[e_last]
+        tail_gap = (end_frame - last_f)
+        if tail_gap >= threshold:
+            run_len_last = (e_last - s_last + 1)
+            if last_v == '×':
+                markers[(cell, last_f)] = ('wavy', run_len_last, True, total_straight_frames)
+            elif is_number_or_alnum(last_v):
+                markers[(cell, last_f)] = ('straight', run_len_last, True, total_straight_frames)
+
     return markers
 
 def draw_wavy_vertical(draw: ImageDraw.ImageDraw, cx: float, y_top: float, y_bottom: float,
@@ -449,7 +513,7 @@ def draw_enclosure(draw, bbox, shape="circle", stroke=2,
     draw.ellipse(
         (cx - r, cy - r, cx + r, cy + r),
         fill=(0, 0, 0, circ_fill_alpha),
-        outline=(0, 0, 0, circle_outline_alpha),
+        outline=(0, 0, 0, circ_outline_alpha),
         width=stroke
     )
 
@@ -517,6 +581,10 @@ def generate_timesheet(
         cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.6 * scale_h))
     except Exception:
         cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))
+    try:
+        jp_font_large = ImageFont.truetype(jp_font_path, size=int(base_font_size * scale_h))
+    except Exception:
+        jp_font_large = font_large
 
     # CSV
     df = read_csv_flexibly(file_bytes)
@@ -532,9 +600,11 @@ def generate_timesheet(
 
     valid_cells = [c for c in CELLS_ALL if c in df.columns]
     df = preprocess_cells(df, valid_cells)
-    # ★ ギャップ判定（全体で一度だけ）
-    gap_markers = build_gap_markers(df, valid_cells, threshold=4)
-    book_positions = get_book_positions(df, valid_cells)
+    # 全体の最終フレーム
+    max_frame = int(df['Frame'].max())
+
+    # ★ ギャップ判定（終端も考慮）
+    gap_markers = build_gap_markers(df, valid_cells, threshold=4, last_frame=max_frame)
 
     max_frame = df['Frame'].max()
     frames_per_page = 144
@@ -689,26 +759,66 @@ def generate_timesheet(
                 draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
 
                 # ==== 直後 4コマ以上のギャップがある場合の補助線（2コマ分） ====
-                mark_kind = gap_markers.get((cell, frame))
-                if mark_kind in ('wavy', 'straight'):
-                    # テキストの bbox 中心を線の中心Xにする（見た目が自然）
-                    tb = draw.textbbox((x, y_draw), timing, font=font)
-                    cx = (tb[0] + tb[2]) / 2.0
-                    # 線の開始を「文字の次のコマ」からにする
-                    y_top = y + frame_height_true
-                    y_bottom = y_top + frame_height_true * 4.0  # 次のコマから 2コマ分
-
-                    stroke_px = max(1, int(3 * scale_w))
-
-                    if mark_kind == 'wavy':
-                        # 幅：コマ半分（peak-to-peak = 0.5コマ → 振幅は 0.25コマ）
-                        amp = 0.08 * (cell_x_positions_true.get('B', 0) - cell_x_positions_true.get('A', 0) or koma_width)
-                        # period は 2/3 コマぐらいで軽く波打つ
-                        period = frame_height_true * 0.75
-                        draw_wavy_vertical(draw, cx, y_top, y_bottom, amplitude=amp, period_px=period, stroke=stroke_px)
+                mark_info = gap_markers.get((cell, frame))
+                if mark_info:
+                    # 対応: 2要素(old), 3要素(prev), 4要素(new)
+                    if isinstance(mark_info, tuple):
+                        if len(mark_info) == 4:
+                            mark_kind, run_len, is_tail, total_straight = mark_info
+                        elif len(mark_info) == 3:
+                            mark_kind, run_len, is_tail = mark_info
+                            total_straight = None
+                        elif len(mark_info) == 2:
+                            mark_kind, run_len = mark_info
+                            is_tail = False
+                            total_straight = None
+                        else:
+                            mark_kind, run_len, is_tail, total_straight = mark_info[0], None, False, None
                     else:
-                        # 直線
-                        draw.line([(cx, y_top), (cx, y_bottom)], fill=(0, 0, 0, 255), width=stroke_px)
+                        mark_kind, run_len, is_tail, total_straight = mark_info, None, False, None
+
+                    if mark_kind in ('wavy', 'straight'):
+                        # 線の中心Xは文字のbbox中心
+                        tb = draw.textbbox((x, y_draw), timing, font=font)
+                        cx = (tb[0] + tb[2]) / 2.0
+
+                        # 基本の線開始位置は「次のコマの上端」
+                        y_top = y + frame_height_true
+
+                        # 「止め」は ① is_tail ② run_len==1 ③ 総フレーム数==1
+                        if (mark_kind == 'straight' and is_tail and run_len == 1 and (total_straight == 1)):
+                            vfont = jp_font_large  # 数字と同等サイズの日本語フォント
+
+                            # 数字の描画位置に合わせた“上揃え”の開始位置を作る（そのコマの y_draw 相当）
+                            def top_like_number(koma_index_from_current: int) -> float:
+                                koma_top = y + frame_height_true * koma_index_from_current
+                                return koma_top + text_offset_y + (NUM1_NUDGE_Y * scale_h)
+
+                            # 1文字目：「止」→ 次のコマの“数字位置”で上揃え
+                            y_top_like = top_like_number(1) - 3  # 3px 上へ
+                            h_stop = draw.textbbox((0, 0), "止", font=vfont)[3] - draw.textbbox((0, 0), "止", font=vfont)[1]
+                            draw_vertical_bottom(draw, "止", bottom_x=cx, bottom_y=y_top_like + h_stop, font=vfont, spacing=0)
+
+                            # 2文字目：「め」→ その次のコマの“数字位置”で上揃え
+                            y_top_like2 = top_like_number(2) - 3  # 3px 上へ
+                            h_me = draw.textbbox((0, 0), "め", font=vfont)[3] - draw.textbbox((0, 0), "め", font=vfont)[1]
+                            draw_vertical_bottom(draw, "め", bottom_x=cx, bottom_y=y_top_like2 + h_me, font=vfont, spacing=0)
+
+                            # 縦線は「め」の直下から。さらに5px下げる
+                            y_top = (y_top_like2 + h_me) + (20 * scale_h) 
+
+                        # 線の終端（4コマ分）
+                        y_bottom = y_top + frame_height_true * 4.0
+                        stroke_px = max(1, int(3 * scale_w))
+
+                        if mark_kind == 'wavy':
+                            # 幅：コマ半分（peak-to-peak = 0.5コマ → 振幅は 0.25コマ）
+                            amp = 0.08 * (cell_x_positions_true.get('B', 0) - cell_x_positions_true.get('A', 0) or koma_width)
+                            # period は 2/3 コマぐらい
+                            period = frame_height_true * 0.75
+                            draw_wavy_vertical(draw, cx, y_top, y_bottom, amplitude=amp, period_px=period, stroke=stroke_px)
+                        else:
+                            draw.line([(cx, y_top), (cx, y_bottom)], fill=(0, 0, 0, 255), width=stroke_px)
 
         # ---- book マーカー（行内共有の重なり回避／枠は飾り）----
         if show_books:

@@ -19,15 +19,35 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2,
     },
-    "動画工房": {
-        "first_frame_top_y_true": 468,
-        "frame_height_true": 27.25,
-        "cell_x_positions_true": {cell: 51.7 + 29 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 870,
-        "true_width": 1754,
-        "true_height": 2480,
+    "BELLNOX FILMS": {
+        "first_frame_top_y_true": 1383,
+        "frame_height_true": 47.28,
+        "cell_x_positions_true": {cell: 88   + 61 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1703,
+        "true_width": 3509,
+        "true_height": 4961,
         "default_book_koma": 5,
-        "default_celllabel_koma": 0,
+        "default_celllabel_koma": 1
+    },
+    "CygamesPictures": {
+        "first_frame_top_y_true": 779,
+        "frame_height_true": 33.98 ,
+        "cell_x_positions_true": {cell: 108.5 + 37.2 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1168,
+        "true_width": 2340,
+        "true_height": 3307,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 3
+    },
+    "J.C.STAFF": {
+        "first_frame_top_y_true": 731,
+        "frame_height_true": 34.65,
+        "cell_x_positions_true": {cell: 90 + 43 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1128,
+        "true_width": 2338,
+        "true_height": 3308,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 2
     },
     "ぴえろ（BLEACH用）": {
         "first_frame_top_y_true": 800,
@@ -49,16 +69,6 @@ presets = {
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     },
-    "CygamesPictures": {
-        "first_frame_top_y_true": 779,
-        "frame_height_true": 33.98 ,
-        "cell_x_positions_true": {cell: 108.5 + 37.2 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 1168,
-        "true_width": 2340,
-        "true_height": 3307,
-        "default_book_koma": 6,
-        "default_celllabel_koma": 2
-    },
     "東映アニメーション": {
         "first_frame_top_y_true": 666,
         "frame_height_true": 35.75,
@@ -68,6 +78,16 @@ presets = {
         "true_height": 3306,
         "default_book_koma": 5,
         "default_celllabel_koma": 1
+    },
+    "動画工房": {
+        "first_frame_top_y_true": 468,
+        "frame_height_true": 27.25,
+        "cell_x_positions_true": {cell: 51.7 + 29 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 870,
+        "true_width": 1754,
+        "true_height": 2480,
+        "default_book_koma": 5,  
+        "default_celllabel_koma": 0,
     }
 }
 

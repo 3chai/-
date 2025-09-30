@@ -29,7 +29,7 @@ presets = {
         "default_book_koma": 5,
         "default_celllabel_koma": 0,
     },
-    "ぴえろ（マイルさん用）": {
+    "ぴえろ（BLEACH用）": {
         "first_frame_top_y_true": 800,
         "frame_height_true": 27.5,
         "cell_x_positions_true": {cell: 86 + 30.8 * offset for cell, offset in cell_offsets.items()},
@@ -39,7 +39,7 @@ presets = {
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     },
-    "ぴえろ(ウーカタさん用）": {
+    "ぴえろ(ブラクロ用）": {
         "first_frame_top_y_true": 591,                  # 最初のフレームの上端Y
         "frame_height_true": 20.98,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 58 + 23.3 * offset for cell, offset in cell_offsets.items()},

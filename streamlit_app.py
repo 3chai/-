@@ -252,6 +252,16 @@ def read_csv_flexibly(file_bytes):
         st.error(f"CSVの読み込みに失敗しました: {e}")
         return pd.DataFrame()
 
+ # 海外CSV対策：中割りが '?'（半角/全角）で入ってくる場合は ● として扱う
+ # valid_cells（A〜H など）の列だけを対象に置換する
+ # ※ 他の記号や数値は変更しない
+
+def replace_question_with_circle(df: pd.DataFrame, valid_cells):
+    for c in valid_cells:
+        if c in df.columns:
+            df[c] = df[c].apply(lambda v: '●' if str(v).strip() in ('?', '？') else v)
+    return df
+
 def preprocess_cells(df_raw, valid_cells):
     for cell in valid_cells:
         if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
@@ -599,6 +609,8 @@ def generate_timesheet(
         return [], 0
 
     valid_cells = [c for c in CELLS_ALL if c in df.columns]
+    # '?'（半角/全角）を ● に変換（海外CSVの中割り表記対策）
+    df = replace_question_with_circle(df, valid_cells)
     df = preprocess_cells(df, valid_cells)
     # 全体の最終フレーム
     max_frame = int(df['Frame'].max())

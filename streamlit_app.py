@@ -3,7 +3,6 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import math, re, io, os, unicodedata, zipfile
 from typing import Optional
-from pathlib import Path
 
 # =============== 基本定義 ===============
 cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
@@ -30,7 +29,7 @@ presets = {
         "default_book_koma": 5,
         "default_celllabel_koma": 0,
     },
-    "ぴえろ（BLEACH用）": {
+    "ぴえろ（マイルさん用）": {
         "first_frame_top_y_true": 800,
         "frame_height_true": 27.5,
         "cell_x_positions_true": {cell: 86 + 30.8 * offset for cell, offset in cell_offsets.items()},
@@ -40,7 +39,7 @@ presets = {
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     },
-    "ぴえろ(ブラクロ用）": {
+    "ぴえろ(ウーカタさん用）": {
         "first_frame_top_y_true": 591,                  # 最初のフレームの上端Y
         "frame_height_true": 20.98,                      # 1コマの高さ
         "cell_x_positions_true": {cell: 58 + 23.3 * offset for cell, offset in cell_offsets.items()},
@@ -131,32 +130,9 @@ CIRCLE_SCALE   = 0.5   # 1.0=等倍
 CIRCLE_NUDGE_X = 8     # px（正=右, 負=左）
 CIRCLE_NUDGE_Y = 10    # px（正=下,  負=上）
 
-# フォント（同梱 fonts/ を優先。海外環境でも ? にならないように日本語フォントを確実に使う）
-FONT_DIR = Path(__file__).resolve().parent / "fonts"
-JP_FONT_CANDIDATES = [
-    FONT_DIR / "NotoSansCJKjp-Regular.otf",
-    FONT_DIR / "NotoSansJP-Regular.ttf",
-    FONT_DIR / "NotoSansJP-Regular.otf",
-]
-LATIN_FONT_CANDIDATES = [
-    FONT_DIR / "DejaVuSans.ttf",
-]
-def load_font(size: int, prefer_jp: bool = True, index: int | None = None):
-    """同梱フォントを優先的に読み込む。ttc は index 0 を既定に。
-    prefer_jp=True で日本語フォント候補を先に試す。
-    見つからなければ PIL のデフォルトにフォールバック。
-    """
-    cands = (JP_FONT_CANDIDATES + LATIN_FONT_CANDIDATES) if prefer_jp else (LATIN_FONT_CANDIDATES + JP_FONT_CANDIDATES)
-    for p in cands:
-        if p.exists():
-            try:
-                if p.suffix.lower() == ".ttc":
-                    return ImageFont.truetype(str(p), size=size, index=(0 if index is None else index))
-                return ImageFont.truetype(str(p), size=size)
-            except OSError:
-                # 形式不一致や index 違いは次候補へ
-                continue
-    return ImageFont.load_default()
+# フォント
+font_path    = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+jp_font_path = os.path.join(os.path.dirname(__file__), "NotoSansJP-Regular.otf")
 base_font_size = int(12 / (1086 / 3508))
 
 # =============== まとめ入力パーサー ===============
@@ -265,21 +241,16 @@ def normalize_for_vertical(text: str) -> str:
             .replace("—", "｜").replace("–", "｜"))
 
 def read_csv_flexibly(file_bytes):
-    last_err = None
-    # 海外環境の CSV は UTF-8 で来ることが多いので UTF-8 優先で試す。
-    for enc in ("utf-8-sig", "utf-8", "cp932", "shift_jis"):
-        try:
-            df = pd.read_csv(io.BytesIO(file_bytes), encoding=enc, header=[0, 1], keep_default_na=False)
-            df.columns = [col[1] if col[1] != '' else col[0] for col in df.columns]
-            if 'Unnamed: 0_level_1' in df.columns:
-                df = df.rename(columns={'Unnamed: 0_level_1': 'Frame'})
-            df.columns = [unicodedata.normalize("NFKC", str(c)).strip() for c in df.columns]
-            return df
-        except Exception as e:
-            last_err = e
-            continue
-    st.error(f"CSVの読み込みに失敗しました: {last_err}")
-    return pd.DataFrame()
+    try:
+        df = pd.read_csv(io.BytesIO(file_bytes), encoding="shift_jis", header=[0, 1], keep_default_na=False)
+        df.columns = [col[1] if col[1] != '' else col[0] for col in df.columns]
+        if 'Unnamed: 0_level_1' in df.columns:
+            df = df.rename(columns={'Unnamed: 0_level_1': 'Frame'})
+        df.columns = [unicodedata.normalize("NFKC", str(c)).strip() for c in df.columns]
+        return df
+    except Exception as e:
+        st.error(f"CSVの読み込みに失敗しました: {e}")
+        return pd.DataFrame()
 
 def preprocess_cells(df_raw, valid_cells):
     for cell in valid_cells:
@@ -602,12 +573,18 @@ def generate_timesheet(
         koma_width = diffs[len(diffs)//2] if diffs else 0.0
 
     # フォント
-    font_large   = load_font(int(base_font_size * scale_h), prefer_jp=True)
-    font_small   = load_font(int(base_font_size * 0.9 * scale_h), prefer_jp=True)
-    font_circle  = load_font(int(base_font_size * scale_h * CIRCLE_SCALE), prefer_jp=True)
-    label_font   = load_font(int(base_font_size * 0.6 * scale_h), prefer_jp=True)
-    cell_label_font = label_font
-    jp_font_large  = load_font(int(base_font_size * scale_h), prefer_jp=True)
+    font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
+    font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
+    font_circle = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * CIRCLE_SCALE))
+    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))
+    try:
+        cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.6 * scale_h))
+    except Exception:
+        cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))
+    try:
+        jp_font_large = ImageFont.truetype(jp_font_path, size=int(base_font_size * scale_h))
+    except Exception:
+        jp_font_large = font_large
 
     # CSV
     df = read_csv_flexibly(file_bytes)
@@ -709,7 +686,7 @@ def generate_timesheet(
                             scale = ALPHA3PLUS_SCALE
                             nx, ny = ALPHA3PLUS_NUDGE_X, ALPHA3PLUS_NUDGE_Y
 
-                        font = load_font(int(base_font_size * scale_h * scale), prefer_jp=True)
+                        font = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * scale))
 
                         # 既存の横位置微調整は活かす（文字詰まり防止）
                         x += alphabet_offset_x
@@ -724,12 +701,12 @@ def generate_timesheet(
                             nx, ny = NUM1_NUDGE_X, NUM1_NUDGE_Y
                         elif nlen == 2:
                             scale = TWO_DIGIT_SCALE
-                            font = load_font(int(base_font_size * scale_h * scale), prefer_jp=True)
+                            font = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * scale))
                             x += alphabet_offset_x * 0.6
                             nx, ny = NUM2_NUDGE_X, NUM2_NUDGE_Y
                         else:
                             scale = THREE_PLUS_SCALE
-                            font = load_font(int(base_font_size * scale_h * scale), prefer_jp=True)
+                            font = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * scale))
                             x += alphabet_offset_x * 0.6
                             nx, ny = NUM3PLUS_NUDGE_X, NUM3PLUS_NUDGE_Y
                         x += nx * scale_w

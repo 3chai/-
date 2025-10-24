@@ -5,7 +5,10 @@ import math, re, io, os, unicodedata, zipfile
 from typing import Optional
 
 # =============== 基本定義 ===============
-cell_offsets = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7}
+cell_offsets = {
+    'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7,
+    'I': 8, 'J': 9, 'K': 10, 'L': 11, 'M': 12, 'N': 13, 'O': 14, 'P': 15
+}
 CELLS_ALL = list(cell_offsets.keys())
 
 presets = {
@@ -1022,7 +1025,7 @@ with st.expander("原画番号の丸/参考設定", expanded=True):
     circle_outline_alpha   = int(round(circ_alpha_pct * 255 / 100))
 
 # セル名入力（1ページ目・縦書き）
-with st.expander("セル名（A〜H）を入力（縦書き・1ページ目のみ / 日本語OK）", expanded=True):
+with st.expander("セル名（A〜P）を入力（縦書き・1ページ目のみ / 日本語OK）", expanded=True):
     default_labels = {c: "" for c in CELLS_ALL}
     cols = st.columns(4)
     cell_labels = {}

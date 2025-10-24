@@ -1001,7 +1001,7 @@ default_celllabel_koma = preset_cfg.get("default_celllabel_koma", 2)
 
 c1, c2, c3 = st.columns(3)
 with c1:
-    show_books = st.checkbox("Bookマーカーを描画する", value=True)
+    show_books = st.checkbox("Bookを描画する", value=True)
 with c2:
     book_offset_koma = st.slider("Bookの高さ（何コマ上）", 0, 12, int(default_book_koma), 1)
 with c3:
@@ -1025,7 +1025,7 @@ with st.expander("原画番号の丸/参考設定", expanded=True):
     circle_outline_alpha   = int(round(circ_alpha_pct * 255 / 100))
 
 # セル名入力（1ページ目・縦書き）
-with st.expander("セル名（A〜P）を入力（縦書き・1ページ目のみ / 日本語OK）", expanded=False):
+with st.expander("セル名（A〜P）を入力）", expanded=False):
     default_labels = {c: "" for c in CELLS_ALL}
     cols = st.columns(4)
     cell_labels = {}

@@ -52,6 +52,16 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
+    "MAPPA": {
+        "first_frame_top_y_true": 553,
+        "frame_height_true": 26.57,
+        "cell_x_positions_true": {cell: 84.5 + 26.7 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 876.5,
+        "true_width": 1788,
+        "true_height": 2514 ,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 2
+    },
     "ぴえろ（BLEACH用）": {
         "first_frame_top_y_true": 800,
         "frame_height_true": 27.5,

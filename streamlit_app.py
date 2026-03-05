@@ -163,10 +163,47 @@ CIRCLE_SCALE   = 0.5   # 1.0=等倍
 CIRCLE_NUDGE_X = 8     # px（正=右, 負=左）
 CIRCLE_NUDGE_Y = 10    # px（正=下,  負=上）
 
-# フォント
-font_path    = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
-jp_font_path = os.path.join(os.path.dirname(__file__), "NotoSansJP-Regular.otf")
+# フォント（Streamlit Cloud 対策：同梱フォント優先＋安全なフォールバック）
+from pathlib import Path
+
+APP_DIR = Path(__file__).resolve().parent
+FONTS_DIR = APP_DIR / "fonts"
+
+# ここにフォントを同梱しておくのが最も確実
+# 例: fonts/DejaVuSans.ttf, fonts/NotoSansJP-Regular.otf
+font_path_candidates = [
+    str(FONTS_DIR / "DejaVuSans.ttf"),
+    str(APP_DIR / "DejaVuSans.ttf"),
+]
+jp_font_path_candidates = [
+    str(FONTS_DIR / "NotoSansJP-Regular.otf"),
+    str(FONTS_DIR / "NotoSansJP-Regular.ttf"),
+    str(APP_DIR / "NotoSansJP-Regular.otf"),
+    str(APP_DIR / "NotoSansJP-Regular.ttf"),
+]
+
 base_font_size = int(12 / (1086 / 3508))
+
+def _pick_existing_path(candidates):
+    for p in candidates:
+        try:
+            if p and os.path.exists(p):
+                return p
+        except Exception:
+            pass
+    return None
+
+FONT_PATH = _pick_existing_path(font_path_candidates)
+JP_FONT_PATH = _pick_existing_path(jp_font_path_candidates)
+
+def safe_truetype(path: str | None, size: int, *, fallback_to_default: bool = True):
+    """Pillow の ImageFont.truetype を安全に呼ぶ。失敗したら load_default に落とす。"""
+    try:
+        if path:
+            return ImageFont.truetype(path, size=size)
+    except Exception:
+        pass
+    return ImageFont.load_default() if fallback_to_default else None
 
 # =============== まとめ入力パーサー ===============
 def parse_triangle_spec(s: str):
@@ -615,19 +652,21 @@ def generate_timesheet(
         diffs.sort()
         koma_width = diffs[len(diffs)//2] if diffs else 0.0
 
-    # フォント
-    font_large = ImageFont.truetype(font_path, size=int(base_font_size * scale_h))
-    font_small = ImageFont.truetype(font_path, size=int(base_font_size * 0.9 * scale_h))
-    font_circle = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * CIRCLE_SCALE))
-    label_font  = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))
-    try:
-        cell_label_font = ImageFont.truetype(jp_font_path, size=int(base_font_size * 0.6 * scale_h))
-    except Exception:
-        cell_label_font = ImageFont.truetype(font_path, size=int(base_font_size * 0.6 * scale_h))
-    try:
-        jp_font_large = ImageFont.truetype(jp_font_path, size=int(base_font_size * scale_h))
-    except Exception:
-        jp_font_large = font_large
+    # フォント（存在しないパスで落ちないように安全にロード）
+    font_large  = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h))
+    font_small  = safe_truetype(FONT_PATH, size=int(base_font_size * 0.9 * scale_h))
+    font_circle = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * CIRCLE_SCALE))
+    label_font  = safe_truetype(FONT_PATH, size=int(base_font_size * 0.6 * scale_h))
+
+    # 日本語フォント（無ければ英字フォントにフォールバック）
+    cell_label_font = safe_truetype(JP_FONT_PATH, size=int(base_font_size * 0.6 * scale_h))
+    jp_font_large   = safe_truetype(JP_FONT_PATH, size=int(base_font_size * scale_h))
+
+    # もし load_default() に落ちてしまった場合、日本語は豆腐になることがあるので警告を出す
+    if JP_FONT_PATH is None:
+        st.warning("日本語フォントが見つかりませんでした。fonts/ に NotoSansJP-Regular.otf(または .ttf) を置くとセル名などが安定します。")
+    if FONT_PATH is None:
+        st.warning("英字フォントが見つかりませんでした。fonts/ に DejaVuSans.ttf を置くと描画が安定します。")
 
     # CSV
     df = read_csv_flexibly(file_bytes)
@@ -731,7 +770,7 @@ def generate_timesheet(
                             scale = ALPHA3PLUS_SCALE
                             nx, ny = ALPHA3PLUS_NUDGE_X, ALPHA3PLUS_NUDGE_Y
 
-                        font = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * scale))
+                        font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * scale))
 
                         # 既存の横位置微調整は活かす（文字詰まり防止）
                         x += alphabet_offset_x
@@ -746,12 +785,12 @@ def generate_timesheet(
                             nx, ny = NUM1_NUDGE_X, NUM1_NUDGE_Y
                         elif nlen == 2:
                             scale = TWO_DIGIT_SCALE
-                            font = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * scale))
+                            font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * scale))
                             x += alphabet_offset_x * 0.6
                             nx, ny = NUM2_NUDGE_X, NUM2_NUDGE_Y
                         else:
                             scale = THREE_PLUS_SCALE
-                            font = ImageFont.truetype(font_path, size=int(base_font_size * scale_h * scale))
+                            font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * scale))
                             x += alphabet_offset_x * 0.6
                             nx, ny = NUM3PLUS_NUDGE_X, NUM3PLUS_NUDGE_Y
                         x += nx * scale_w

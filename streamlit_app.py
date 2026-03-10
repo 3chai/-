@@ -506,7 +506,7 @@ def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, tria
                          triangle_numbers, alpha_all_triangle=False):
     """
     タイムシート情報から枚数を集計する。
-      - douga_count: 動画枚数（中割り点 + 数字/数字+英字の合計）
+      - douga_count: 動画枚数（中割り点 + 同じセル内の重複を除いた数字/数字+英字の合計）
       - genga_count: 原画枚数（丸が付く数字/数字+英字）
       - sankou_count: 参考枚数（三角が付く数字/数字+英字）
     """
@@ -517,6 +517,8 @@ def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, tria
     for cell in valid_cells:
         if cell not in df.columns:
             continue
+
+        seen_tokens = set()  # 同じセル内のリピートは1回だけ数える
 
         for raw in df[cell].tolist():
             timing = "" if pd.isna(raw) else str(raw).strip()
@@ -535,11 +537,16 @@ def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, tria
             # 数字 / 数字+英字
             m = re.fullmatch(r"(\d+)([a-zA-Z]?)", timing)
             if m:
-                douga_count += 1
-
                 num_text = m.group(1)
                 suffix = m.group(2).lower()
                 token = f"{num_text}{suffix}"
+
+                # 同じセル内で同じ番号/番号+英字が続いたり再登場しても1枚扱い
+                if token in seen_tokens:
+                    continue
+                seen_tokens.add(token)
+
+                douga_count += 1
                 cell_tok = f"{cell}{token}"
 
                 is_triangle = (

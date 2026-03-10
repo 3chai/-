@@ -64,8 +64,8 @@ presets = {
     },
     "サイエンスSARU": {
         "first_frame_top_y_true": 638.3,
-        "frame_height_true": 24.7,
-        "cell_x_positions_true": {cell: 40.5 + 29.9 * offset for cell, offset in cell_offsets.items()},
+        "frame_height_true": 24.6,
+        "cell_x_positions_true": {cell: 41 + 29.8 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 855.5,
         "true_width": 1754,
         "true_height": 2480,

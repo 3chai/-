@@ -1173,9 +1173,7 @@ if uploaded_file is not None:
             remainder = total_frames % 24
             st.text_input("TIME", value=f"{seconds} + {remainder}")
 
-            c_time, c_douga, c_genga, c_sankou = st.columns(4)
-            with c_time:
-                st.metric("総フレーム", total_frames)
+            c_douga, c_genga, c_sankou = st.columns(3)
             with c_douga:
                 st.metric("動画枚数", counts["douga_count"])
             with c_genga:

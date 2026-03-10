@@ -501,6 +501,64 @@ def build_gap_markers(df: pd.DataFrame, valid_cells, threshold: int = 4, last_fr
 
     return markers
 
+# =================== 枚数カウントヘルパー ===================
+def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, triangle_alpha_tokens,
+                         triangle_numbers, alpha_all_triangle=False):
+    """
+    タイムシート情報から枚数を集計する。
+      - douga_count: 動画枚数（中割り点 + 数字/数字+英字の合計）
+      - genga_count: 原画枚数（丸が付く数字/数字+英字）
+      - sankou_count: 参考枚数（三角が付く数字/数字+英字）
+    """
+    douga_count = 0
+    genga_count = 0
+    sankou_count = 0
+
+    for cell in valid_cells:
+        if cell not in df.columns:
+            continue
+
+        for raw in df[cell].tolist():
+            timing = "" if pd.isna(raw) else str(raw).strip()
+            if not timing:
+                continue
+
+            # × は原画枚数に含めない（表示上の補完記号として扱う）
+            if timing == '×':
+                continue
+
+            # 中割り点
+            if timing in ('●', '○', '〇'):
+                douga_count += 1
+                continue
+
+            # 数字 / 数字+英字
+            m = re.fullmatch(r"(\d+)([a-zA-Z]?)", timing)
+            if m:
+                douga_count += 1
+
+                num_text = m.group(1)
+                suffix = m.group(2).lower()
+                token = f"{num_text}{suffix}"
+                cell_tok = f"{cell}{token}"
+
+                is_triangle = (
+                    (cell_tok in triangle_cell_refs) or
+                    (suffix and (alpha_all_triangle or (token in triangle_alpha_tokens))) or
+                    ((not suffix) and (int(num_text) in triangle_numbers))
+                )
+
+                if is_triangle:
+                    sankou_count += 1
+                else:
+                    genga_count += 1
+
+    return {
+        "douga_count": douga_count,
+        "genga_count": genga_count,
+        "sankou_count": sankou_count,
+    }
+
 def draw_wavy_vertical(draw: ImageDraw.ImageDraw, cx: float, y_top: float, y_bottom: float,
                        amplitude: float, period_px: float, stroke: int):
     """
@@ -671,19 +729,29 @@ def generate_timesheet(
     # CSV
     df = read_csv_flexibly(file_bytes)
     if df.empty or 'Frame' not in df.columns:
-        return [], 0
+        return [], 0, {"douga_count": 0, "genga_count": 0, "sankou_count": 0}
 
     df['Frame'] = clean_frame_column(df['Frame'])
     df = df.dropna(subset=['Frame'])
     df['Frame'] = df['Frame'].astype(int)
     df = df[df['Frame'] > 0]
     if df.empty:
-        return [], 0
+        return [], 0, {"douga_count": 0, "genga_count": 0, "sankou_count": 0}
 
     valid_cells = [c for c in CELLS_ALL if c in df.columns]
     # '?'（半角/全角）を ● に変換（海外CSVの中割り表記対策）
     df = replace_question_with_circle(df, valid_cells)
     df = preprocess_cells(df, valid_cells)
+
+    counts = compute_sheet_counts(
+        df,
+        valid_cells,
+        triangle_cell_refs,
+        triangle_alpha_tokens,
+        triangle_numbers,
+        alpha_all_triangle=alpha_all_triangle,
+    )
+
     # 全体の最終フレーム
     max_frame = int(df['Frame'].max())
 
@@ -1013,7 +1081,7 @@ def generate_timesheet(
 
         result_images.append(img)
 
-    return result_images, max_frame
+    return result_images, max_frame, counts
 
 # =============== UI（CSSでサイズ調整） ===============
 st.markdown("""
@@ -1086,7 +1154,7 @@ uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["
 
 if uploaded_file is not None:
     if st.button("タイムシート生成！"):
-        pages, total_frames = generate_timesheet(
+        pages, total_frames, counts = generate_timesheet(
             uploaded_file.read(),
             preset_cfg,
             show_books=show_books,
@@ -1104,6 +1172,16 @@ if uploaded_file is not None:
             seconds = total_frames // 24
             remainder = total_frames % 24
             st.text_input("TIME", value=f"{seconds} + {remainder}")
+
+            c_time, c_douga, c_genga, c_sankou = st.columns(4)
+            with c_time:
+                st.metric("総フレーム", total_frames)
+            with c_douga:
+                st.metric("動画枚数", counts["douga_count"])
+            with c_genga:
+                st.metric("原画枚数", counts["genga_count"])
+            with c_sankou:
+                st.metric("参考枚数", counts["sankou_count"])
 
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:

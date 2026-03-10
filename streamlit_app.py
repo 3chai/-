@@ -63,9 +63,9 @@ presets = {
         "default_celllabel_koma": 2
     },
     "サイエンスSARU": {
-        "first_frame_top_y_true": 638.5,
-        "frame_height_true": 24.5 ,
-        "cell_x_positions_true": {cell: 40 + 30 * offset for cell, offset in cell_offsets.items()},
+        "first_frame_top_y_true": 638.3,
+        "frame_height_true": 24.7 ,
+        "cell_x_positions_true": {cell: 40.5 + 29.9 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 855.5,
         "true_width": 1754,
         "true_height": 2480,

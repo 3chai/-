@@ -62,6 +62,16 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
+    "サイエンスSARU": {
+        "first_frame_top_y_true": 640,
+        "frame_height_true": 25 ,
+        "cell_x_positions_true": {cell: 37 + 39 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 855.5,
+        "true_width": 1754,
+        "true_height": 2480,
+        "default_book_koma": 4,
+        "default_celllabel_koma": 1
+    },
     "ぴえろ（BLEACH用）": {
         "first_frame_top_y_true": 800,
         "frame_height_true": 27.5,

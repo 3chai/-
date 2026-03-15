@@ -206,7 +206,7 @@ def _pick_existing_path(candidates):
 FONT_PATH = _pick_existing_path(font_path_candidates)
 JP_FONT_PATH = _pick_existing_path(jp_font_path_candidates)
 
-def safe_truetype(path: str | None, size: int, *, fallback_to_default: bool = True):
+def safe_truetype(path: Optional[str], size: int, *, fallback_to_default: bool = True):
     """Pillow の ImageFont.truetype を安全に呼ぶ。失敗したら load_default に落とす。"""
     try:
         if path:
@@ -694,6 +694,7 @@ def generate_timesheet(
     triangle_outline_alpha=TRIANGLE_OUTLINE_ALPHA,
     circle_outline_alpha=CIRCLE_OUTLINE_ALPHA,
     alpha_all_triangle=False,
+    use_three_second_sheet=False,
 ):
     # 入力一発 → セル参照・英字付きトークン・数字セットに分解
     triangle_cell_refs, triangle_alpha_tokens, triangle_numbers = parse_triangle_spec(mixed_triangle_str)
@@ -776,7 +777,8 @@ def generate_timesheet(
     gap_markers = build_gap_markers(df, valid_cells, threshold=4, last_frame=max_frame)
 
     max_frame = df['Frame'].max()
-    frames_per_page = 144
+    frames_per_page = 72 if use_three_second_sheet else 144
+    frames_per_column = 72
     total_pages = math.ceil(max_frame / frames_per_page)
     last_frame_global = max_frame
     result_images = []
@@ -787,7 +789,7 @@ def generate_timesheet(
         draw = ImageDraw.Draw(img)
 
         start = page*frames_per_page + 1
-        end = (page+1)*frames_per_page
+        end = min((page+1)*frames_per_page, max_frame)
         df_page = df[(df['Frame']>=start) & (df['Frame']<=end)]
         if df_page.empty:
             result_images.append(img); continue
@@ -820,8 +822,8 @@ def generate_timesheet(
                 frame = int(row['Frame'])
                 timing = str(row[cell]) if not pd.isna(row[cell]) else ""
                 idx = (frame-1) % frames_per_page
-                col_block = idx // 72
-                row_pos = idx % 72
+                col_block = idx // frames_per_column
+                row_pos = idx % frames_per_column
                 y = first_frame_top_y_true + row_pos*frame_height_true
                 x = x_base if col_block==0 else x_base + column_offset_x
                 y_draw = y + text_offset_y
@@ -998,8 +1000,8 @@ def generate_timesheet(
             for _, row in df_page.iterrows():
                 frame = int(row['Frame'])
                 idx = (frame-1) % frames_per_page
-                col_block = idx // 72
-                row_pos = idx % 72
+                col_block = idx // frames_per_column
+                row_pos = idx % frames_per_column
 
                 row_y_base = first_frame_top_y_true + row_pos*frame_height_true
                 col_x_offset = column_offset_x if col_block==1 else 0
@@ -1081,8 +1083,8 @@ def generate_timesheet(
         # ---- 黒バー（全体の最後のフレーム位置のみ）----
         if page == total_pages - 1:
             idx_last = (last_frame_global - 1) % frames_per_page
-            col_last = idx_last // 72
-            row_last = idx_last % 72
+            col_last = idx_last // frames_per_column
+            row_last = idx_last % frames_per_column
 
             bar_y = first_frame_top_y_true + (row_last + 1) * frame_height_true
             bar_x = 0 if col_last == 0 else column_offset_x
@@ -1133,12 +1135,14 @@ preset_cfg = presets[selected_preset]
 default_book_koma = preset_cfg.get("default_book_koma", 6)
 default_celllabel_koma = preset_cfg.get("default_celllabel_koma", 2)
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 with c1:
     show_books = st.checkbox("Bookを描画する", value=True)
 with c2:
-    book_offset_koma = st.slider("Bookの高さ（何コマ上）", 0, 12, int(default_book_koma), 1)
+    use_three_second_sheet = st.checkbox("3秒タイムシート", value=False)
 with c3:
+    book_offset_koma = st.slider("Bookの高さ（何コマ上）", 0, 12, int(default_book_koma), 1)
+with c4:
     celllabel_koma = st.slider("セル名の高さ（何コマ上）", 0, 6, int(default_celllabel_koma), 1)
 
 # 丸/三角設定（入力はひとつだけ）
@@ -1182,6 +1186,7 @@ if uploaded_file is not None:
             triangle_outline_alpha=triangle_outline_alpha,
             circle_outline_alpha=circle_outline_alpha,
             alpha_all_triangle=alpha_all_triangle,
+            use_three_second_sheet=use_three_second_sheet,
         )
         if not pages:
             st.warning("有効なFrameデータが見つかりませんでした。")

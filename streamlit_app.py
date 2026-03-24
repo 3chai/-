@@ -62,6 +62,16 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
+    “Voil”: {
+        "first_frame_top_y_true": 561,
+        "frame_height_true": 25,
+        "cell_x_positions_true": {cell: 62 + 32 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 891,
+        "true_width": 1753,
+        "true_height": 2480 ,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 2
+    },
     "サイエンスSARU": {
         "first_frame_top_y_true": 638.3,
         "frame_height_true": 24.6,

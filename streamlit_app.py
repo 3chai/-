@@ -62,7 +62,7 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
-    “Voil”: {
+    "Voil": {
         "first_frame_top_y_true": 561,
         "frame_height_true": 25,
         "cell_x_positions_true": {cell: 62 + 32 * offset for cell, offset in cell_offsets.items()},
@@ -1173,7 +1173,7 @@ with st.expander("原画番号の丸/参考設定", expanded=True):
     circle_outline_alpha   = int(round(circ_alpha_pct * 255 / 100))
 
 # セル名入力（1ページ目・縦書き）
-with st.expander("セル名（A〜P）を入力）", expanded=False):
+with st.expander("セル名（A〜P）を入力", expanded=False):
     default_labels = {c: "" for c in CELLS_ALL}
     cols = st.columns(4)
     cell_labels = {}

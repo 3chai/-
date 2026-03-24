@@ -63,9 +63,9 @@ presets = {
         "default_celllabel_koma": 2
     },
     "Voil": {
-        "first_frame_top_y_true": 559.5,
+        "first_frame_top_y_true": 559,
         "frame_height_true": 25.6,
-        "cell_x_positions_true": {cell: 72 + 32.7 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 71 + 32.7 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 838.3,
         "true_width": 1753,
         "true_height": 2480 ,

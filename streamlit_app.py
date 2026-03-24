@@ -63,10 +63,10 @@ presets = {
         "default_celllabel_koma": 2
     },
     "Voil": {
-        "first_frame_top_y_true": 560,
+        "first_frame_top_y_true": 559.5,
         "frame_height_true": 25.6,
-        "cell_x_positions_true": {cell: 69 + 32.7 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 871,
+        "cell_x_positions_true": {cell: 70 + 32.7 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 838.3,
         "true_width": 1753,
         "true_height": 2480 ,
         "default_book_koma": 6,

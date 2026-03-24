@@ -64,7 +64,7 @@ presets = {
     },
     "Voil": {
         "first_frame_top_y_true": 560,
-        "frame_height_true": 26,
+        "frame_height_true": 25.8,
         "cell_x_positions_true": {cell: 69 + 32.7 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 891,
         "true_width": 1753,

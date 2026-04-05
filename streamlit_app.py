@@ -1155,7 +1155,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("ちゃいむしーと Web版 v4.2")
+st.title("ちゃいむしーと Web版 v4.3")
 
 # プリセット選択
 selected_preset = st.selectbox("会社プリセット", list(presets.keys()))

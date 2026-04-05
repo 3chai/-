@@ -52,6 +52,16 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
+    "ROLL2": {
+        "first_frame_top_y_true": 1429,                  # 最初のフレームの上端Y
+        "frame_height_true": 47.65,                      # 1コマの高さ
+        "cell_x_positions_true": {cell: 136.5 + 59.65 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1715.5,                         # 右カラムまでのXオフセット
+        "true_width": 3597,
+        "true_height": 4960,
+        "default_book_koma": 4,
+        "default_celllabel_koma": 1
+    },
     "MAPPA": {
         "first_frame_top_y_true": 553,
         "frame_height_true": 26.57,
@@ -71,6 +81,16 @@ presets = {
         "true_height": 2480 ,
         "default_book_koma": 6,
         "default_celllabel_koma": 2
+    },
+    "100studio": {
+        "first_frame_top_y_true": 1064,
+        "frame_height_true": 63.4,
+        "cell_x_positions_true": {cell: 120  + 69.9 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1989,
+        "true_width": 4093,
+        "true_height": 5787 ,
+        "default_book_koma": 4,
+        "default_celllabel_koma": 1
     },
     "サイエンスSARU": {
         "first_frame_top_y_true": 638.3,

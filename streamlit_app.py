@@ -544,7 +544,7 @@ def get_extra_info_columns(df: pd.DataFrame, valid_cells):
 
 # ===== Extra label helpers =====
 def is_camera_like_label(name: str) -> bool:
-    n = str(name).lower()
+    n = unicodedata.normalize("NFKC", str(name)).strip().lower()
     return (
         "カメラ" in n or
         "camera" in n or
@@ -552,7 +552,11 @@ def is_camera_like_label(name: str) -> bool:
         "tb" in n or
         "t.b" in n or
         "fix" in n or
-        "zoom" in n
+        "zoom" in n or
+        "ブレ" in n or
+        "shake" in n or
+        "振動" in n or
+        "揺れ" in n
     )
 
 
@@ -901,18 +905,22 @@ def build_camera_segments(df: pd.DataFrame, camera_cols):
         grouped.append({"start": seg_start, "end": seg_prev_frame, "value": seg_val})
 
         for i, seg in enumerate(grouped):
+            label = str(seg["value"]).strip()
+            if not label:
+                continue
+
             prev_label = ""
             next_label = ""
 
             for j in range(i - 1, -1, -1):
                 cand = str(grouped[j]["value"]).strip()
-                if cand and not is_camera_action_label(cand):
+                if cand and not cand.startswith("SYMBOL_") and cand != label:
                     prev_label = cand
                     break
 
             for j in range(i + 1, len(grouped)):
                 cand = str(grouped[j]["value"]).strip()
-                if cand and not is_camera_action_label(cand):
+                if cand and not cand.startswith("SYMBOL_") and cand != label:
                     next_label = cand
                     break
 
@@ -920,7 +928,7 @@ def build_camera_segments(df: pd.DataFrame, camera_cols):
                 "col": col,
                 "start": seg["start"],
                 "end": seg["end"],
-                "label": seg["value"],
+                "label": label,
                 "prev_label": prev_label,
                 "next_label": next_label,
                 "prev_end": grouped[i - 1]["end"] if i - 1 >= 0 else None,
@@ -1235,7 +1243,7 @@ def generate_timesheet(
                 lh = bbox[3] - bbox[1]
 
                 lx = cam_x - lw / 2
-                ly = y_start - frame_height_true * book_offset_koma
+                ly = y_start - frame_height_true
 
                 draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=cam_font)
                 draw.rectangle([
@@ -1247,19 +1255,19 @@ def generate_timesheet(
 
                 # ==== 開始・終点マーカー（コマ位置に合わせる） ====
                 marker_x = cam_x - 6 * scale_w
-                marker_start_y = y_start + text_offset_y
-                marker_end_y = y_end + text_offset_y
+                marker_start_y = y_start
+                marker_end_y = y_end
                 draw.text((marker_x, marker_start_y), "▼", fill=(0, 0, 0, 255), font=cam_mark_font)
                 draw.text((marker_x, marker_end_y), "▲", fill=(0, 0, 0, 255), font=cam_mark_font)
 
                 # ==== A / B / C などの状態ラベルを開始・終点に表示 ====
                 prev_label = str(seg.get("prev_label", "") or "").strip()
                 next_label = str(seg.get("next_label", "") or "").strip()
-                if prev_label and is_camera_state_label(prev_label):
+                if prev_label:
                     pb = draw.textbbox((0, 0), prev_label, font=cam_state_font)
                     pw = pb[2] - pb[0]
                     draw.text((marker_x - pw - 6 * scale_w, marker_start_y), prev_label, fill=(0, 0, 0, 255), font=cam_state_font)
-                if next_label and is_camera_state_label(next_label):
+                if next_label:
                     draw.text((cam_x + 6 * scale_w, marker_end_y), next_label, fill=(0, 0, 0, 255), font=cam_state_font)
 
                 # ==== 縦線（▼の直下から▲の直前まで） ====

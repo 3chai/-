@@ -434,55 +434,18 @@ def read_xdts_flexibly(file_bytes):
             names = header.get("names", []) or []
             header_map[field_id] = [unicodedata.normalize("NFKC", str(n)).strip() for n in names]
 
-        target_field = None
-        for field in table.get("fields", []):
-            if field.get("fieldId") == 0:
-                target_field = field
-                break
-        if target_field is None:
-            return pd.DataFrame()
-
-        names = header_map.get(0, [])
-        tracks = target_field.get("tracks", [])
-        if not tracks:
-            return pd.DataFrame()
-
         frame_count = duration
         rows = [{"Frame": i + 1} for i in range(frame_count)]
         df = pd.DataFrame(rows)
 
-        for track in tracks:
-            track_no = int(track.get("trackNo", -1))
-            if track_no < 0 or track_no >= len(names):
+        # fieldId=0（A/B/C/_book など）に加えて、カメラ欄など他 field もすべて展開する
+        for field in table.get("fields", []):
+            field_id = field.get("fieldId")
+            names = header_map.get(field_id, [])
+            tracks = field.get("tracks", [])
+            if not names or not tracks:
                 continue
-
-            col_name = names[track_no]
-            if not col_name:
-                continue
-
-            values = [""] * frame_count
-            events = sorted(track.get("frames", []), key=lambda fr: int(fr.get("frame", 0)))
-            if not events:
-                df[col_name] = values
-                continue
-
-            for idx, event in enumerate(events):
-                start = int(event.get("frame", 0))
-                next_start = int(events[idx + 1].get("frame", frame_count)) if idx + 1 < len(events) else frame_count
-
-                payloads = event.get("data", []) or []
-                raw_value = ""
-                if payloads:
-                    raw_value = ((payloads[0].get("values", []) or [""])[0])
-                value = _normalize_xdts_cell_value(raw_value)
-
-                start = max(0, start)
-                end = min(frame_count, next_start)
-                for frame_idx in range(start, end):
-                    if 0 <= frame_idx < frame_count:
-                        values[frame_idx] = value
-
-            df[col_name] = values
+            df = _expand_xdts_tracks_to_dataframe(df, names, tracks, frame_count)
 
         df.columns = [unicodedata.normalize("NFKC", str(c)).strip() for c in df.columns]
         return df
@@ -501,6 +464,64 @@ def read_timesheet_table(file_bytes, filename: str = ""):
     if name.endswith(".xdts") or b"exchangeDigitalTimeSheet Save Data" in head:
         return read_xdts_flexibly(file_bytes)
     return read_csv_flexibly(file_bytes)
+
+# === XDTS extra field helpers ===
+def _make_unique_column_name(base_name: str, existing_names: set) -> str:
+    name = unicodedata.normalize("NFKC", str(base_name)).strip() or "field"
+    if name not in existing_names:
+        return name
+    i = 2
+    while f"{name}_{i}" in existing_names:
+        i += 1
+    return f"{name}_{i}"
+
+
+def _expand_xdts_tracks_to_dataframe(df: pd.DataFrame, names, tracks, frame_count: int):
+    existing_names = set(df.columns)
+    for track in tracks:
+        track_no = int(track.get("trackNo", -1))
+        if track_no < 0 or track_no >= len(names):
+            continue
+
+        raw_col_name = names[track_no]
+        if not raw_col_name:
+            continue
+
+        col_name = _make_unique_column_name(raw_col_name, existing_names)
+        existing_names.add(col_name)
+
+        values = [""] * frame_count
+        events = sorted(track.get("frames", []), key=lambda fr: int(fr.get("frame", 0)))
+        if not events:
+            df[col_name] = values
+            continue
+
+        for idx, event in enumerate(events):
+            start = int(event.get("frame", 0))
+            next_start = int(events[idx + 1].get("frame", frame_count)) if idx + 1 < len(events) else frame_count
+
+            payloads = event.get("data", []) or []
+            raw_value = ""
+            if payloads:
+                raw_value = ((payloads[0].get("values", []) or [""])[0])
+            value = _normalize_xdts_cell_value(raw_value)
+
+            start = max(0, start)
+            end = min(frame_count, next_start)
+            for frame_idx in range(start, end):
+                if 0 <= frame_idx < frame_count:
+                    values[frame_idx] = value
+
+        df[col_name] = values
+
+    return df
+
+
+def get_extra_info_columns(df: pd.DataFrame, valid_cells):
+    cols = list(df.columns)
+    book_cols = {c for c in cols if re.match(r"^_?book\d+$", str(c), re.IGNORECASE)}
+    excluded = {"Frame", *valid_cells, *book_cols}
+    return [c for c in cols if c not in excluded]
 
 def get_book_positions(df, valid_cells):
     cols = list(df.columns)
@@ -903,6 +924,7 @@ def generate_timesheet(
         return [], 0, {"douga_count": 0, "genga_count": 0, "sankou_count": 0}
 
     valid_cells = [c for c in CELLS_ALL if c in df.columns]
+    extra_info_cols = get_extra_info_columns(df, valid_cells)
     # '?'（半角/全角）を ● に変換（海外CSVの中割り表記対策）
     df = replace_question_with_circle(df, valid_cells)
     df = preprocess_cells(df, valid_cells)
@@ -960,6 +982,39 @@ def generate_timesheet(
                     font=cell_label_font,
                     spacing=glyph_spacing
                 )
+
+        # ---- カメラ欄・補足欄（XDTSの extra field を右側メモ欄へ描画）----
+        if extra_info_cols:
+            extra_font = safe_truetype(JP_FONT_PATH or FONT_PATH, size=max(10, int(base_font_size * 0.48 * scale_h)))
+            extra_x_base = (max(cell_x_positions_true.values()) + koma_width * 1.35)
+            extra_line_gap = max(10, int(11 * scale_h))
+            extra_max_lines = 3
+
+            for _, row in df_page.iterrows():
+                frame = int(row['Frame'])
+                idx = (frame-1) % frames_per_page
+                col_block = idx // frames_per_column
+                row_pos = idx % frames_per_column
+                y = first_frame_top_y_true + row_pos*frame_height_true
+                x_extra = extra_x_base if col_block == 0 else extra_x_base + column_offset_x
+
+                extra_lines = []
+                for col in extra_info_cols:
+                    if col not in row.index:
+                        continue
+                    raw = row[col]
+                    val = "" if pd.isna(raw) else str(raw).strip()
+                    if not val or val == "×":
+                        continue
+                    extra_lines.append(f"{col}:{val}")
+
+                for line_idx, text in enumerate(extra_lines[:extra_max_lines]):
+                    draw.text(
+                        (x_extra, y + text_offset_y + line_idx * extra_line_gap),
+                        text,
+                        fill=(0, 0, 0, 255),
+                        font=extra_font
+                    )
 
         # ---- 通常セル（丸/三角 囲み対応）----
         for cell in valid_cells:

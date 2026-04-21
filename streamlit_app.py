@@ -457,6 +457,18 @@ def read_xdts_flexibly(file_bytes):
                 continue
             df = _expand_xdts_tracks_to_dataframe(df, names, tracks, frame_count)
 
+        # XDTS は同値が全フレームに展開されるので、見た目はCSV同様に先頭以外を空欄化する
+        for col in list(df.columns):
+            if col == "Frame" or str(col).startswith("__kf__"):
+                continue
+            prev = None
+            for i in range(len(df)):
+                cur = "" if pd.isna(df.at[i, col]) else str(df.at[i, col]).strip()
+                if cur and cur == prev:
+                    df.at[i, col] = ""
+                elif cur:
+                    prev = cur
+
         df.columns = [unicodedata.normalize("NFKC", str(c)).strip() for c in df.columns]
         return df
     except Exception as e:
@@ -655,7 +667,7 @@ def build_camera_action_segments(label_timeline, max_frame: int):
     """
     ラベル時系列からカメラ系 action ごとに独立した区間を作る。
     A PAN B PAN C のような並びでも、PAN を2区間として拾う。
-    end は次の非actionラベルの frame を優先し、見つからなければ start+4 まで伸ばす。
+    end は次の非actionラベルの直前フレームまで伸ばす。見つからなければ start+4。
     """
     segments = []
     n = len(label_timeline)
@@ -682,9 +694,10 @@ def build_camera_action_segments(label_timeline, max_frame: int):
                 next_frame = int(label_timeline[j]["frame"])
                 break
 
-        end = next_frame if next_frame is not None else min(max_frame, start + 4)
-        if end < start:
-            end = start
+        if next_frame is not None:
+            end = max(start, next_frame - 1)
+        else:
+            end = min(max_frame, start + 4)
 
         segments.append({
             "start": start,
@@ -717,15 +730,14 @@ def find_nearest_non_action_label(frame_label_map, center_frame: int, *, search_
     return ""
 
 
-# ==== PATCH: Replace build_dialogue_events ====
 def build_dialogue_events(label_timeline):
     """
     action ではない文字ラベルのうち、短い状態ラベル（A/B/C など）を除いて
     セリフ候補イベントにする。
-    同一 frame / text の重複は除外。
+    同一テキストが連続しても先頭だけ返す。
     """
     events = []
-    seen = set()
+    prev_texts = set()
     for ev in label_timeline:
         text = str(ev["label"]).strip()
         if not text:
@@ -734,11 +746,11 @@ def build_dialogue_events(label_timeline):
             continue
         if is_short_state_label(text):
             continue
-        key = (int(ev["frame"]), text)
-        if key in seen:
-            continue
-        seen.add(key)
-        events.append({"frame": int(ev["frame"]), "text": text})
+
+        current = {text}
+        if text not in prev_texts:
+            events.append({"frame": int(ev["frame"]), "text": text})
+        prev_texts = current
     return events
 
 
@@ -1277,7 +1289,7 @@ def generate_timesheet(
                     draw.text((cam_x + 6 * scale_w, marker_end_y), next_label, fill=(0, 0, 0, 255), font=cam_state_font)
 
                 line_top = y_start + frame_height_true
-                line_bottom = y_end
+                line_bottom = y_end + frame_height_true
                 if line_bottom > line_top:
                     stroke_px = max(1, int(3 * scale_w))
                     if is_blur_like_label(label):

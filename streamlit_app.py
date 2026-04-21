@@ -897,6 +897,8 @@ def build_camera_segments(df: pd.DataFrame, camera_cols):
                 "label": seg["value"],
                 "prev_label": prev_label,
                 "next_label": next_label,
+                "prev_end": grouped[i - 1]["end"] if i - 1 >= 0 else None,
+                "next_start": grouped[i + 1]["start"] if i + 1 < len(grouped) else None,
             })
     return segments
 
@@ -1162,9 +1164,11 @@ def generate_timesheet(
                         font=extra_font
                     )
 
-        # ---- カメラ系ラベル（BOOK風 + ギャップ線流用）----
+        # ---- カメラ系ラベル（BOOK風 + 開始終点ラベル + 正しい始終点マーカー）----
         if camera_info_cols and camera_segments:
-            cam_font = label_font  # ← BOOKと同じ見た目
+            cam_font = label_font  # BOOKと同じ見た目
+            cam_mark_font = font_small
+            cam_state_font = font_small
 
             for seg in camera_segments:
                 if not is_camera_action_label(seg["label"]):
@@ -1175,58 +1179,69 @@ def generate_timesheet(
                 seg_start = max(seg["start"], start)
                 seg_end = min(seg["end"], end)
 
-                # ==== コマ位置計算（既存セルと完全一致させる）====
+                # 左右カラムをまたぐ場合は、このページ内では描かない
                 idx_start = (seg_start - 1) % frames_per_page
-                col_block = idx_start // frames_per_column
-                row_pos = idx_start % frames_per_column
+                idx_end = (seg_end - 1) % frames_per_page
+                col_block_start = idx_start // frames_per_column
+                col_block_end = idx_end // frames_per_column
+                if col_block_start != col_block_end:
+                    continue
 
-                base_y = first_frame_top_y_true + row_pos * frame_height_true
-                x_offset = 0 if col_block == 0 else column_offset_x
+                row_pos_start = idx_start % frames_per_column
+                row_pos_end = idx_end % frames_per_column
+                x_offset = 0 if col_block_start == 0 else column_offset_x
 
-                # X位置は一番右の外に固定
+                y_start = first_frame_top_y_true + row_pos_start * frame_height_true
+                y_end = first_frame_top_y_true + row_pos_end * frame_height_true
+
+                # X位置は右端の外に固定
                 cam_x = max(cell_x_positions_true.values()) + koma_width * 1.2 + x_offset
 
-                # ==== BOOKと同じ描画 ==== 
+                # ==== BOOKと同じ描画 ====
                 label = str(seg["label"]).strip()
-
                 bbox = draw.textbbox((0, 0), label, font=cam_font)
                 lw = bbox[2] - bbox[0]
                 lh = bbox[3] - bbox[1]
 
-                lx = cam_x - lw/2
-                ly = base_y - frame_height_true * book_offset_koma
+                lx = cam_x - lw / 2
+                ly = y_start - frame_height_true * book_offset_koma
 
-                draw.text((lx, ly), label, fill=(0,0,0,255), font=cam_font)
+                draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=cam_font)
                 draw.rectangle([
-                    lx - 2*scale_w,
-                    ly - 2*scale_h,
-                    lx + lw + 2*scale_w,
-                    ly + lh + 2*scale_h
-                ], outline=(0,0,0,255), width=max(1,int(1.5*scale_w)))
+                    lx - 2 * scale_w,
+                    ly - 2 * scale_h,
+                    lx + lw + 2 * scale_w,
+                    ly + lh + 2 * scale_h
+                ], outline=(0, 0, 0, 255), width=max(1, int(1.5 * scale_w)))
 
-                # ==== ▼ ▲ ==== 
-                start_idx = (seg_start - 1) % frames_per_page
-                end_idx = (seg_end - 1) % frames_per_page
+                # ==== 開始・終点マーカー（コマ位置に合わせる） ====
+                marker_x = cam_x - 6 * scale_w
+                marker_start_y = y_start + text_offset_y
+                marker_end_y = y_end + text_offset_y
+                draw.text((marker_x, marker_start_y), "▼", fill=(0, 0, 0, 255), font=cam_mark_font)
+                draw.text((marker_x, marker_end_y), "▲", fill=(0, 0, 0, 255), font=cam_mark_font)
 
-                start_row = start_idx % frames_per_column
-                end_row = end_idx % frames_per_column
+                # ==== A / B / C などの状態ラベルを開始・終点に表示 ====
+                prev_label = str(seg.get("prev_label", "") or "").strip()
+                next_label = str(seg.get("next_label", "") or "").strip()
+                if prev_label and not is_camera_action_label(prev_label):
+                    pb = draw.textbbox((0, 0), prev_label, font=cam_state_font)
+                    pw = pb[2] - pb[0]
+                    draw.text((marker_x - pw - 6 * scale_w, marker_start_y), prev_label, fill=(0, 0, 0, 255), font=cam_state_font)
+                if next_label and not is_camera_action_label(next_label):
+                    draw.text((cam_x + 6 * scale_w, marker_end_y), next_label, fill=(0, 0, 0, 255), font=cam_state_font)
 
-                y_start = first_frame_top_y_true + start_row * frame_height_true
-                y_end = first_frame_top_y_true + end_row * frame_height_true
-
-                draw.text((cam_x - 6*scale_w, y_start), "▼", fill=(0,0,0,255), font=font_small)
-                draw.text((cam_x - 6*scale_w, y_end), "▲", fill=(0,0,0,255), font=font_small)
-
-                # ==== 線（既存ロジック流用）====
+                # ==== 縦線（▼の直下から▲の直前まで） ====
                 line_top = y_start + frame_height_true
-                line_bottom = y_start + frame_height_true * 5
-
-                if is_blur_like_label(label):
-                    amp = 0.08 * koma_width
-                    period = frame_height_true * 0.75
-                    draw_wavy_vertical(draw, cam_x, line_top, line_bottom, amplitude=amp, period_px=period, stroke=max(1,int(3*scale_w)))
-                else:
-                    draw.line([(cam_x, line_top), (cam_x, line_bottom)], fill=(0,0,0,255), width=max(1,int(3*scale_w)))
+                line_bottom = y_end
+                if line_bottom > line_top:
+                    stroke_px = max(1, int(3 * scale_w))
+                    if is_blur_like_label(label):
+                        amp = 0.08 * koma_width
+                        period = frame_height_true * 0.75
+                        draw_wavy_vertical(draw, cam_x, line_top, line_bottom, amplitude=amp, period_px=period, stroke=stroke_px)
+                    else:
+                        draw.line([(cam_x, line_top), (cam_x, line_bottom)], fill=(0, 0, 0, 255), width=stroke_px)
         if dialogue_label_cols:
             dialogue_font = safe_truetype(JP_FONT_PATH or FONT_PATH, size=max(10, int(base_font_size * 0.7 * scale_h)))
             dialogue_x_base = max(cell_x_positions_true.values()) + koma_width * 0.25

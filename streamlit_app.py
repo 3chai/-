@@ -601,6 +601,44 @@ def build_label_events(df: pd.DataFrame, label_cols):
             prev_val = val
     return events
 
+
+# ===== Extra label helpers =====
+def _clean_extra_label_value(v):
+    s = "" if pd.isna(v) else str(v).strip()
+    if not s or s == "×" or s.startswith("SYMBOL_"):
+        return ""
+    return s
+
+
+def find_nearest_non_action_label(df: pd.DataFrame, extra_cols, center_frame: int, *, exclude_col: str = "", search_before: bool = True, max_distance: int = 12):
+    """
+    近傍フレーム帯から、PAN/TB/FIX などの action 以外のラベルを拾う。
+    A/B/C、画ブレ、セリフなどを開始点/終点の補助ラベルとして使うためのフォールバック。
+    """
+    if df.empty:
+        return ""
+
+    frame_to_row = {int(r["Frame"]): r for _, r in df.iterrows()}
+    distances = range(0, max_distance + 1)
+
+    for d in distances:
+        frame = center_frame - d if search_before else center_frame + d
+        row = frame_to_row.get(frame)
+        if row is None:
+            continue
+        for col in extra_cols:
+            if exclude_col and col == exclude_col:
+                continue
+            if col not in row.index:
+                continue
+            val = _clean_extra_label_value(row[col])
+            if not val:
+                continue
+            if is_camera_action_label(val):
+                continue
+            return val
+    return ""
+
 def get_book_positions(df, valid_cells):
     cols = list(df.columns)
     book_cols = [c for c in cols if re.match(r"^_?book\d+$", str(c), re.IGNORECASE)]
@@ -1191,8 +1229,10 @@ def generate_timesheet(
                     if col not in row.index:
                         continue
                     raw = row[col]
-                    val = "" if pd.isna(raw) else str(raw).strip()
-                    if not val or val == "×":
+                    val = _clean_extra_label_value(raw)
+                    if not val:
+                        continue
+                    if is_camera_action_label(val):
                         continue
                     extra_lines.append(f"{val}")
 
@@ -1244,7 +1284,7 @@ def generate_timesheet(
                 lh = bbox[3] - bbox[1]
 
                 lx = cam_x - lw / 2
-                ly = y_start - frame_height_true
+                ly = y_start - frame_height_true + text_offset_y
 
                 draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=cam_font)
                 draw.rectangle([
@@ -1264,6 +1304,22 @@ def generate_timesheet(
                 # ==== A / B / C などの状態ラベルを開始・終点に表示 ====
                 prev_label = str(seg.get("prev_label", "") or "").strip()
                 next_label = str(seg.get("next_label", "") or "").strip()
+
+                if not prev_label:
+                    prev_label = find_nearest_non_action_label(
+                        df_page, extra_info_cols, seg_start,
+                        exclude_col=seg.get("col", ""),
+                        search_before=True,
+                        max_distance=12,
+                    )
+                if not next_label:
+                    next_label = find_nearest_non_action_label(
+                        df_page, extra_info_cols, seg_end,
+                        exclude_col=seg.get("col", ""),
+                        search_before=False,
+                        max_distance=12,
+                    )
+
                 if prev_label:
                     pb = draw.textbbox((0, 0), prev_label, font=cam_state_font)
                     pw = pb[2] - pb[0]

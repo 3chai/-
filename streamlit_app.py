@@ -491,9 +491,11 @@ def _expand_xdts_tracks_to_dataframe(df: pd.DataFrame, names, tracks, frame_coun
         existing_names.add(col_name)
 
         values = [""] * frame_count
+        keyframes = [False] * frame_count
         events = sorted(track.get("frames", []), key=lambda fr: int(fr.get("frame", 0)))
         if not events:
             df[col_name] = values
+            df[f"__kf__{col_name}"] = keyframes
             continue
 
         for idx, event in enumerate(events):
@@ -508,20 +510,82 @@ def _expand_xdts_tracks_to_dataframe(df: pd.DataFrame, names, tracks, frame_coun
 
             start = max(0, start)
             end = min(frame_count, next_start)
+            if 0 <= start < frame_count:
+                keyframes[start] = True
             for frame_idx in range(start, end):
                 if 0 <= frame_idx < frame_count:
                     values[frame_idx] = value
 
         df[col_name] = values
+        df[f"__kf__{col_name}"] = keyframes
 
     return df
 
 
 def get_extra_info_columns(df: pd.DataFrame, valid_cells):
     cols = list(df.columns)
+
     book_cols = {c for c in cols if re.match(r"^_?book\d+$", str(c), re.IGNORECASE)}
-    excluded = {"Frame", *valid_cells, *book_cols}
+    hidden_cols = {c for c in cols if str(c).startswith("__kf__")}
+
+    excluded = {"Frame", "BG", "_BG", *valid_cells, *book_cols, *hidden_cols}
     return [c for c in cols if c not in excluded]
+
+
+# ===== Extra label helpers =====
+def is_camera_like_label(name: str) -> bool:
+    n = str(name).lower()
+    return (
+        "カメラ" in n or
+        "camera" in n or
+        "pan" in n or
+        "tb" in n or
+        "t.b" in n or
+        "fix" in n or
+        "zoom" in n
+    )
+
+
+def is_dialogue_label_col(name: str) -> bool:
+    n = unicodedata.normalize("NFKC", str(name)).strip().lower()
+    return (
+        n == "lo" or
+        "loフォルダ" in n or
+        "lo folder" in n or
+        "セリフ" in n or
+        "台詞" in n or
+        "dialog" in n
+    )
+
+
+def split_dialogue_mora(text: str):
+    s = re.sub(r"\s+", "", normalize_for_vertical(str(text)))
+    if not s:
+        return []
+
+    small_chars = set("ゃゅょぁぃぅぇぉゎァィゥェォャュョヮっッ")
+    morae = []
+    for ch in s:
+        if ch in small_chars and morae:
+            morae[-1] += ch
+        else:
+            morae.append(ch)
+    return morae
+
+
+def build_label_events(df: pd.DataFrame, label_cols):
+    events = []
+    for col in label_cols:
+        if col not in df.columns:
+            continue
+        prev_val = None
+        for _, row in df[["Frame", col]].iterrows():
+            raw = row[col]
+            val = "" if pd.isna(raw) else str(raw).strip()
+            if val and val != "×" and val != prev_val:
+                events.append({"col": col, "frame": int(row["Frame"]), "text": val})
+            prev_val = val
+    return events
 
 def get_book_positions(df, valid_cells):
     cols = list(df.columns)
@@ -758,6 +822,84 @@ def draw_wavy_vertical(draw: ImageDraw.ImageDraw, cx: float, y_top: float, y_bot
     if len(pts) >= 2:
         draw.line(pts, fill=(0, 0, 0, 255), width=stroke)
 
+
+# ===== カメラ系ラベル描画用ヘルパー =====
+def draw_dashed_vertical(draw: ImageDraw.ImageDraw, cx: float, y_top: float, y_bottom: float,
+                         dash_len: float, gap_len: float, stroke: int):
+    y = y_top
+    while y < y_bottom:
+        y2 = min(y + dash_len, y_bottom)
+        draw.line([(cx, y), (cx, y2)], fill=(0, 0, 0, 255), width=stroke)
+        y += dash_len + gap_len
+
+
+def is_blur_like_label(text: str) -> bool:
+    n = unicodedata.normalize("NFKC", str(text)).strip().lower()
+    return (
+        "ブレ" in n or
+        "shake" in n or
+        "振動" in n or
+        "揺れ" in n
+    )
+
+
+def is_camera_action_label(text: str) -> bool:
+    n = unicodedata.normalize("NFKC", str(text)).strip().lower()
+    return (
+        "pan" in n or
+        "t.u" in n or "tu" in n or
+        "t.b" in n or "tb" in n or
+        "fix" in n or
+        "slide" in n or
+        "zoom" in n or
+        is_blur_like_label(n)
+    )
+
+
+def build_camera_segments(df: pd.DataFrame, camera_cols):
+    segments = []
+    for col in camera_cols:
+        if col not in df.columns:
+            continue
+
+        values = []
+        for _, row in df[["Frame", col]].iterrows():
+            frame = int(row["Frame"])
+            raw = row[col]
+            val = "" if pd.isna(raw) else str(raw).strip()
+            if val and val != "×":
+                values.append((frame, val))
+
+        if not values:
+            continue
+
+        grouped = []
+        seg_start = values[0][0]
+        seg_prev_frame = values[0][0]
+        seg_val = values[0][1]
+        for frame, val in values[1:]:
+            if frame == seg_prev_frame + 1 and val == seg_val:
+                seg_prev_frame = frame
+                continue
+            grouped.append({"start": seg_start, "end": seg_prev_frame, "value": seg_val})
+            seg_start = frame
+            seg_prev_frame = frame
+            seg_val = val
+        grouped.append({"start": seg_start, "end": seg_prev_frame, "value": seg_val})
+
+        for i, seg in enumerate(grouped):
+            prev_label = grouped[i - 1]["value"] if i - 1 >= 0 else ""
+            next_label = grouped[i + 1]["value"] if i + 1 < len(grouped) else ""
+            segments.append({
+                "col": col,
+                "start": seg["start"],
+                "end": seg["end"],
+                "label": seg["value"],
+                "prev_label": prev_label,
+                "next_label": next_label,
+            })
+    return segments
+
 # 三角の見た目調整
 TRIANGLE_NUDGE_Y = -0.9  # 負=上、正=下（px）
 TRIANGLE_BASE_W_SCALE = 1.2
@@ -925,6 +1067,10 @@ def generate_timesheet(
 
     valid_cells = [c for c in CELLS_ALL if c in df.columns]
     extra_info_cols = get_extra_info_columns(df, valid_cells)
+    camera_info_cols = [c for c in extra_info_cols if is_camera_like_label(c)]
+    dialogue_label_cols = [c for c in extra_info_cols if is_dialogue_label_col(c)]
+    memo_label_cols = [c for c in extra_info_cols if c not in dialogue_label_cols and c not in camera_info_cols]
+    camera_segments = build_camera_segments(df, camera_info_cols)
     # '?'（半角/全角）を ● に変換（海外CSVの中割り表記対策）
     df = replace_question_with_circle(df, valid_cells)
     df = preprocess_cells(df, valid_cells)
@@ -983,8 +1129,8 @@ def generate_timesheet(
                     spacing=glyph_spacing
                 )
 
-        # ---- カメラ欄・補足欄（XDTSの extra field を右側メモ欄へ描画）----
-        if extra_info_cols:
+        # ---- 補足ラベル（内容だけを右側メモ欄へ描画）----
+        if memo_label_cols:
             extra_font = safe_truetype(JP_FONT_PATH or FONT_PATH, size=max(10, int(base_font_size * 0.48 * scale_h)))
             extra_x_base = (max(cell_x_positions_true.values()) + koma_width * 1.35)
             extra_line_gap = max(10, int(11 * scale_h))
@@ -999,14 +1145,14 @@ def generate_timesheet(
                 x_extra = extra_x_base if col_block == 0 else extra_x_base + column_offset_x
 
                 extra_lines = []
-                for col in extra_info_cols:
+                for col in memo_label_cols:
                     if col not in row.index:
                         continue
                     raw = row[col]
                     val = "" if pd.isna(raw) else str(raw).strip()
                     if not val or val == "×":
                         continue
-                    extra_lines.append(f"{col}:{val}")
+                    extra_lines.append(f"{val}")
 
                 for line_idx, text in enumerate(extra_lines[:extra_max_lines]):
                     draw.text(
@@ -1016,7 +1162,115 @@ def generate_timesheet(
                         font=extra_font
                     )
 
-        # ---- 通常セル（丸/三角 囲み対応）----
+        # ---- カメラ系ラベル（箱ラベル + 開始/終了マーカー + 縦線）----
+        if camera_info_cols and camera_segments:
+            cam_font = safe_truetype(JP_FONT_PATH or FONT_PATH, size=max(10, int(base_font_size * 0.55 * scale_h)))
+            cam_small_font = safe_truetype(JP_FONT_PATH or FONT_PATH, size=max(9, int(base_font_size * 0.46 * scale_h)))
+            cam_x_base = max(cell_x_positions_true.values()) + koma_width * 0.95
+            cam_lane_gap = max(16, int(koma_width * 0.95))
+            cam_label_gap_y = max(8, int(8 * scale_h))
+            cam_marker_gap_x = max(8, int(9 * scale_w))
+            cam_cols_sorted = sorted(camera_info_cols)
+            cam_lane_x = {
+                col: cam_x_base + i * cam_lane_gap
+                for i, col in enumerate(cam_cols_sorted)
+            }
+
+            def frame_to_page_xy(target_frame: int):
+                idx = (target_frame - 1) % frames_per_page
+                col_block = idx // frames_per_column
+                row_pos = idx % frames_per_column
+                y = first_frame_top_y_true + row_pos * frame_height_true
+                x_offset = 0 if col_block == 0 else column_offset_x
+                return row_pos, y, x_offset
+
+            for seg in camera_segments:
+                if not is_camera_action_label(seg["label"]):
+                    continue
+                if seg["end"] < start or seg["start"] > end:
+                    continue
+
+                seg_start = max(seg["start"], start)
+                seg_end = min(seg["end"], end)
+                lane_x_base = cam_lane_x.get(seg["col"], cam_x_base)
+
+                _, y_start, start_x_offset = frame_to_page_xy(seg_start)
+                _, y_end, end_x_offset = frame_to_page_xy(seg_end)
+
+                if start_x_offset != end_x_offset:
+                    continue
+
+                x_lane = lane_x_base + start_x_offset
+                y_top = y_start + text_offset_y + int(10 * scale_h)
+                y_bottom = y_end + text_offset_y + int(10 * scale_h)
+                stroke_px = max(1, int(2 * scale_w))
+
+                label_text = str(seg["label"]).strip()
+                label_bbox = draw.textbbox((0, 0), label_text, font=cam_font)
+                label_w = label_bbox[2] - label_bbox[0]
+                label_h = label_bbox[3] - label_bbox[1]
+                box_pad_x = 4 * scale_w
+                box_pad_y = 2 * scale_h
+                box_x1 = x_lane - (label_w / 2) - box_pad_x
+                box_y1 = y_top - label_h - cam_label_gap_y - box_pad_y
+                box_x2 = x_lane + (label_w / 2) + box_pad_x
+                box_y2 = y_top - cam_label_gap_y + box_pad_y
+                draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline=(0, 0, 0, 255), width=max(1, int(1.5 * scale_w)))
+                draw.text((x_lane - label_w / 2, box_y1 + box_pad_y - 1 * scale_h), label_text, fill=(0, 0, 0, 255), font=cam_font)
+
+                start_marker = "▼"
+                end_marker = "▲"
+                draw.text((x_lane - 4 * scale_w, y_top - 7 * scale_h), start_marker, fill=(0, 0, 0, 255), font=cam_small_font)
+                draw.text((x_lane - 4 * scale_w, y_bottom - 2 * scale_h), end_marker, fill=(0, 0, 0, 255), font=cam_small_font)
+
+                prev_label = str(seg.get("prev_label", "")).strip()
+                next_label = str(seg.get("next_label", "")).strip()
+                if prev_label and not is_camera_action_label(prev_label):
+                    draw.text((x_lane - cam_marker_gap_x - 10 * scale_w, y_top - 5 * scale_h), prev_label, fill=(0, 0, 0, 255), font=cam_small_font)
+                if next_label and not is_camera_action_label(next_label):
+                    draw.text((x_lane + cam_marker_gap_x, y_bottom - 2 * scale_h), next_label, fill=(0, 0, 0, 255), font=cam_small_font)
+
+                line_start = y_top + max(6, int(7 * scale_h))
+                line_end = y_bottom - max(4, int(4 * scale_h))
+                if line_end > line_start:
+                    if is_blur_like_label(label_text):
+                        amp = max(3, 0.08 * koma_width)
+                        period = frame_height_true * 0.75
+                        draw_wavy_vertical(draw, x_lane, line_start, line_end, amplitude=amp, period_px=period, stroke=stroke_px)
+                    else:
+                        draw_dashed_vertical(draw, x_lane, line_start, line_end,
+                                             dash_len=max(5, frame_height_true * 0.7),
+                                             gap_len=max(3, frame_height_true * 0.25),
+                                             stroke=stroke_px)
+        if dialogue_label_cols:
+            dialogue_font = safe_truetype(JP_FONT_PATH or FONT_PATH, size=max(10, int(base_font_size * 0.7 * scale_h)))
+            dialogue_x_base = max(cell_x_positions_true.values()) + koma_width * 0.25
+            dialogue_lane_gap = max(10, int(koma_width * 0.6))
+            dialogue_cols_sorted = sorted(dialogue_label_cols)
+            dialogue_lane_x = {
+                col: dialogue_x_base + i * dialogue_lane_gap
+                for i, col in enumerate(dialogue_cols_sorted)
+            }
+
+            for event in build_label_events(df_page, dialogue_label_cols):
+                lane_x = dialogue_lane_x.get(event["col"], dialogue_x_base)
+                morae = split_dialogue_mora(event["text"])
+                for mi, mora in enumerate(morae):
+                    target_frame = int(event["frame"]) + (mi * 3)
+                    if not (start <= target_frame <= end):
+                        continue
+
+                    idx = (target_frame - 1) % frames_per_page
+                    col_block = idx // frames_per_column
+                    row_pos = idx % frames_per_column
+                    y = first_frame_top_y_true + row_pos * frame_height_true
+                    x_dialogue = lane_x if col_block == 0 else lane_x + column_offset_x
+                    draw.text(
+                        (x_dialogue, y + text_offset_y),
+                        mora,
+                        fill=(0, 0, 0, 255),
+                        font=dialogue_font
+                    )
         for cell in valid_cells:
             x_base = cell_x_positions_true[cell]
             for _, row in df_page.iterrows():

@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
-import math, re, io, os, unicodedata, zipfile, json
+import math, re, io, os, unicodedata, zipfile
 from typing import Optional
 
 # =============== 基本定義 ===============
@@ -384,375 +384,18 @@ def replace_question_with_circle(df: pd.DataFrame, valid_cells):
 
 def preprocess_cells(df_raw, valid_cells):
     for cell in valid_cells:
-        if cell not in df_raw.columns:
-            continue
         if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
             continue
         seen_content = False
         for idx, row in df_raw.iterrows():
             val = str(row[cell]).strip()
             if val == "" or pd.isna(row[cell]):
-                # 元々空だったセルは「×」として扱う
-                df_raw.at[idx, cell] = "×"
+                if not seen_content:
+                    df_raw.at[idx, cell] = "×"
+                    seen_content = True
             else:
                 seen_content = True
     return df_raw
-# XDTS support helpers
-def _normalize_xdts_cell_value(value):
-    s = "" if value is None else str(value).strip()
-    # XDTS の記号プレースホルダは表示用の実文字ではないので空扱いにする
-    if s in (
-        "SYMBOL_NULL_CELL",
-        "SYMBOL_HYPHEN",
-        "SYMBOL_PERIOD",
-        "SYMBOL_COMMA",
-        "SYMBOL_SLASH",
-        "null",
-        "None",
-        ""
-    ):
-        return ""
-    return s
-
-
-def read_xdts_flexibly(file_bytes):
-    """
-    XDTS（exchangeDigitalTimeSheet Save Data）を DataFrame に変換する。
-    現状は timeTables[0] の fieldId=0（セル列群）を対象に、
-    trackNo と timeTableHeaders の names を対応付けて 1フレームごとの表へ展開する。
-    """
-    try:
-        text = file_bytes.decode("utf-8-sig", errors="ignore")
-        marker = "exchangeDigitalTimeSheet Save Data"
-        if marker in text:
-            text = text.split(marker, 1)[1].strip()
-
-        data = json.loads(text)
-        time_tables = data.get("timeTables", [])
-        if not time_tables:
-            return pd.DataFrame()
-
-        table = time_tables[0]
-        duration = int(table.get("duration", 0) or 0)
-        if duration <= 0:
-            return pd.DataFrame()
-
-        header_map = {}
-        for header in table.get("timeTableHeaders", []):
-            field_id = header.get("fieldId")
-            names = header.get("names", []) or []
-            header_map[field_id] = [unicodedata.normalize("NFKC", str(n)).strip() for n in names]
-
-        frame_count = duration
-        rows = [{"Frame": i + 1} for i in range(frame_count)]
-        df = pd.DataFrame(rows)
-
-        # fieldId=0（A/B/C/_book など）に加えて、カメラ欄など他 field もすべて展開する
-        for field in table.get("fields", []):
-            field_id = field.get("fieldId")
-            names = header_map.get(field_id, [])
-            tracks = field.get("tracks", [])
-            if not names or not tracks:
-                continue
-            df = _expand_xdts_tracks_to_dataframe(df, names, tracks, frame_count)
-
-        # XDTS は同値が全フレームに展開されるので、見た目はCSV同様に先頭以外を空欄化する
-        for col in list(df.columns):
-            if col == "Frame" or str(col).startswith("__kf__"):
-                continue
-            prev = None
-            for i in range(len(df)):
-                cur = "" if pd.isna(df.at[i, col]) else str(df.at[i, col]).strip()
-                if cur and cur == prev and cur not in ("×", "X", "x"):
-                    df.at[i, col] = ""
-                elif cur:
-                    prev = cur
-
-        df.columns = [unicodedata.normalize("NFKC", str(c)).strip() for c in df.columns]
-        return df
-    except Exception as e:
-        st.error(f"XDTSの読み込みに失敗しました: {e}")
-        return pd.DataFrame()
-
-
-def read_timesheet_table(file_bytes, filename: str = ""):
-    """
-    CSV / XDTS を自動判定して DataFrame を返す。
-    """
-    name = (filename or "").lower()
-    head = file_bytes[:256]
-
-    if name.endswith(".xdts") or b"exchangeDigitalTimeSheet Save Data" in head:
-        return read_xdts_flexibly(file_bytes)
-    return read_csv_flexibly(file_bytes)
-
-# === XDTS extra field helpers ===
-def _make_unique_column_name(base_name: str, existing_names: set) -> str:
-    name = unicodedata.normalize("NFKC", str(base_name)).strip() or "field"
-    if name not in existing_names:
-        return name
-    i = 2
-    while f"{name}_{i}" in existing_names:
-        i += 1
-    return f"{name}_{i}"
-
-
-def _expand_xdts_tracks_to_dataframe(df: pd.DataFrame, names, tracks, frame_count: int):
-    existing_names = set(df.columns)
-    for track in tracks:
-        track_no = int(track.get("trackNo", -1))
-        if track_no < 0 or track_no >= len(names):
-            continue
-
-        raw_col_name = names[track_no]
-        if not raw_col_name:
-            continue
-
-        col_name = _make_unique_column_name(raw_col_name, existing_names)
-        existing_names.add(col_name)
-
-        values = [""] * frame_count
-        keyframes = [False] * frame_count
-        events = sorted(track.get("frames", []), key=lambda fr: int(fr.get("frame", 0)))
-        if not events:
-            df[col_name] = values
-            df[f"__kf__{col_name}"] = keyframes
-            continue
-
-        for idx, event in enumerate(events):
-            start = int(event.get("frame", 0))
-            next_start = int(events[idx + 1].get("frame", frame_count)) if idx + 1 < len(events) else frame_count
-
-            payloads = event.get("data", []) or []
-            raw_value = ""
-            if payloads:
-                raw_value = ((payloads[0].get("values", []) or [""])[0])
-            value = _normalize_xdts_cell_value(raw_value)
-
-            start = max(0, start)
-            end = min(frame_count, next_start)
-            if 0 <= start < frame_count:
-                keyframes[start] = True
-            for frame_idx in range(start, end):
-                if 0 <= frame_idx < frame_count:
-                    values[frame_idx] = value
-
-        df[col_name] = values
-        df[f"__kf__{col_name}"] = keyframes
-
-    return df
-
-
-def get_extra_info_columns(df: pd.DataFrame, valid_cells):
-    cols = list(df.columns)
-
-    book_cols = {c for c in cols if re.match(r"^_?book\d+$", str(c), re.IGNORECASE)}
-    hidden_cols = {c for c in cols if str(c).startswith("__kf__")}
-
-    excluded = {"Frame", "BG", "_BG", *valid_cells, *book_cols, *hidden_cols}
-    return [c for c in cols if c not in excluded]
-
-# ===== New XDTS extra-label helpers pipeline =====
-def is_camera_action_label(text: str) -> bool:
-    n = unicodedata.normalize("NFKC", str(text)).strip().lower()
-    return (
-        "pan" in n or
-        "t.u" in n or n == "tu" or
-        "t.b" in n or n == "tb" or
-        "fix" in n or
-        "slide" in n or
-        "zoom" in n or
-        "truck" in n or
-        "follow" in n or
-        "camera" in n or
-        "カメラ" in n or
-        is_blur_like_label(n)
-    )
-
-
-def is_blur_like_label(text: str) -> bool:
-    n = unicodedata.normalize("NFKC", str(text)).strip().lower()
-    return (
-        "ブレ" in n or
-        "shake" in n or
-        "振動" in n or
-        "揺れ" in n
-    )
-
-
-def clean_extra_label_value(v):
-    s = "" if pd.isna(v) else str(v).strip()
-    if not s or s == "×" or s.startswith("SYMBOL_"):
-        return ""
-    # セル外の純数字 / 数字+英字は無視
-    if re.fullmatch(r"\d+([a-zA-Z])?", s):
-        return ""
-    return s
-
-
-def split_dialogue_mora(text: str):
-    s = re.sub(r"\s+", "", normalize_for_vertical(str(text)))
-    if not s:
-        return []
-    small_chars = set("ゃゅょぁぃぅぇぉゎァィゥェォャュョヮっッ")
-    morae = []
-    for ch in s:
-        if ch in small_chars and morae:
-            morae[-1] += ch
-        else:
-            morae.append(ch)
-    return morae
-
-
-def collect_extra_label_events(df: pd.DataFrame, extra_cols):
-    """
-    extra列を全部走査して、文字ラベルだけを frame ごとのイベントとして集める。
-    戻り値は {frame: [label1, label2, ...]}。
-    同フレーム内の重複は除外する。
-    """
-    frame_map = {}
-    for _, row in df.iterrows():
-        frame = int(row["Frame"])
-        labels = []
-        seen = set()
-        for col in extra_cols:
-            if col not in row.index:
-                continue
-            val = clean_extra_label_value(row[col])
-            if not val:
-                continue
-            if val in seen:
-                continue
-            seen.add(val)
-            labels.append(val)
-        if labels:
-            frame_map[frame] = labels
-    return frame_map
-
-
-# ==== PATCH: Insert helper functions after collect_extra_label_events ====
-def collect_extra_label_timeline(df: pd.DataFrame, extra_cols):
-    """
-    extra列を時間順のイベント列に展開する。
-    戻り値: [{frame, label, col}, ...]
-    同一 frame / col / label の重複は除外する。
-    """
-    events = []
-    seen = set()
-    for _, row in df.iterrows():
-        frame = int(row["Frame"])
-        for col in extra_cols:
-            if col not in row.index:
-                continue
-            val = clean_extra_label_value(row[col])
-            if not val:
-                continue
-            key = (frame, col, val)
-            if key in seen:
-                continue
-            seen.add(key)
-            events.append({"frame": frame, "label": val, "col": col})
-    events.sort(key=lambda e: (e["frame"], str(e["col"]), str(e["label"])))
-    return events
-
-
-def is_short_state_label(text: str) -> bool:
-    n = unicodedata.normalize("NFKC", str(text)).strip()
-    return bool(re.fullmatch(r"[A-Za-z]{1,2}", n))
-
-
-# ==== PATCH: Replace build_camera_action_segments ====
-def build_camera_action_segments(label_timeline, max_frame: int):
-    """
-    ラベル時系列からカメラ系 action ごとに独立した区間を作る。
-    A PAN B PAN C のような並びでも、PAN を2区間として拾う。
-    end は次の非actionラベルの直前フレームまで伸ばす。見つからなければ start+4。
-    """
-    segments = []
-    n = len(label_timeline)
-    for i, ev in enumerate(label_timeline):
-        label = str(ev["label"]).strip()
-        if not is_camera_action_label(label):
-            continue
-
-        start = int(ev["frame"])
-
-        prev_label = ""
-        for j in range(i - 1, -1, -1):
-            cand = str(label_timeline[j]["label"]).strip()
-            if cand and not is_camera_action_label(cand):
-                prev_label = cand
-                break
-
-        next_label = ""
-        next_frame = None
-        for j in range(i + 1, n):
-            cand = str(label_timeline[j]["label"]).strip()
-            if cand and not is_camera_action_label(cand):
-                next_label = cand
-                next_frame = int(label_timeline[j]["frame"])
-                break
-
-        if next_frame is not None:
-            end = max(start, next_frame - 1)
-        else:
-            end = min(max_frame, start + 4)
-
-        segments.append({
-            "start": start,
-            "end": end,
-            "label": label,
-            "prev_label": prev_label,
-            "next_label": next_label,
-        })
-
-    segments.sort(key=lambda d: (d["start"], d["label"]))
-    return segments
-
-
-def find_nearest_non_action_label(frame_label_map, center_frame: int, *, search_before: bool, max_distance: int = 12):
-    """
-    frame_label_map から action 以外の最寄りラベルを返す。
-    同一フレーム優先、その後近傍探索。
-    """
-    labels0 = frame_label_map.get(int(center_frame), [])
-    for lab in labels0:
-        if not is_camera_action_label(lab):
-            return lab
-
-    for d in range(1, max_distance + 1):
-        f = center_frame - d if search_before else center_frame + d
-        labels = frame_label_map.get(f, [])
-        for lab in labels:
-            if not is_camera_action_label(lab):
-                return lab
-    return ""
-
-
-def build_dialogue_events(label_timeline):
-    """
-    action ではない文字ラベルのうち、短い状態ラベル（A/B/C など）を除いて
-    セリフ候補イベントにする。
-    同一テキストが連続しても先頭だけ返す。
-    """
-    events = []
-    prev_texts = set()
-    for ev in label_timeline:
-        text = str(ev["label"]).strip()
-        if not text:
-            continue
-        if is_camera_action_label(text):
-            continue
-        if is_short_state_label(text):
-            continue
-
-        current = {text}
-        if text not in prev_texts:
-            events.append({"frame": int(ev["frame"]), "text": text})
-        prev_texts = current
-    return events
-
-
 
 def get_book_positions(df, valid_cells):
     cols = list(df.columns)
@@ -989,8 +632,6 @@ def draw_wavy_vertical(draw: ImageDraw.ImageDraw, cx: float, y_top: float, y_bot
     if len(pts) >= 2:
         draw.line(pts, fill=(0, 0, 0, 255), width=stroke)
 
-
-
 # 三角の見た目調整
 TRIANGLE_NUDGE_Y = -0.9  # 負=上、正=下（px）
 TRIANGLE_BASE_W_SCALE = 1.2
@@ -1081,7 +722,6 @@ def y_for_frame(top_y: int, n_frame: int, frame_h: float, fps: int = 24) -> int:
 def generate_timesheet(
     file_bytes,
     preset,
-    filename="",
     show_books=True,
     book_offset_koma=6,
     cell_labels=None,
@@ -1144,8 +784,8 @@ def generate_timesheet(
     if FONT_PATH is None:
         st.warning("英字フォントが見つかりませんでした。fonts/ に DejaVuSans.ttf を置くと描画が安定します。")
 
-    # CSV / XDTS
-    df = read_timesheet_table(file_bytes, filename=filename)
+    # CSV
+    df = read_csv_flexibly(file_bytes)
     if df.empty or 'Frame' not in df.columns:
         return [], 0, {"douga_count": 0, "genga_count": 0, "sankou_count": 0}
 
@@ -1157,11 +797,6 @@ def generate_timesheet(
         return [], 0, {"douga_count": 0, "genga_count": 0, "sankou_count": 0}
 
     valid_cells = [c for c in CELLS_ALL if c in df.columns]
-    extra_info_cols = get_extra_info_columns(df, valid_cells)
-    extra_label_map = collect_extra_label_events(df, extra_info_cols)
-    extra_label_timeline = collect_extra_label_timeline(df, extra_info_cols)
-    camera_segments = build_camera_action_segments(extra_label_timeline, int(df['Frame'].max()))
-    dialogue_events_all = build_dialogue_events(extra_label_timeline)
     # '?'（半角/全角）を ● に変換（海外CSVの中割り表記対策）
     df = replace_question_with_circle(df, valid_cells)
     df = preprocess_cells(df, valid_cells)
@@ -1220,106 +855,7 @@ def generate_timesheet(
                     spacing=glyph_spacing
                 )
 
-        # ---- 補足ラベル（内容だけを右側メモ欄へ描画）----
-
-        # ---- カメラ系ラベル（BOOK風 + 始終点補助ラベル）----
-        if camera_segments:
-            cam_font = label_font
-            cam_mark_font = font_small
-            cam_state_font = font_small
-
-            for seg in camera_segments:
-                if seg["end"] < start or seg["start"] > end:
-                    continue
-
-                seg_start = max(seg["start"], start)
-                seg_end = min(seg["end"], end)
-
-                idx_start = (seg_start - 1) % frames_per_page
-                idx_end = (seg_end - 1) % frames_per_page
-                col_block_start = idx_start // frames_per_column
-                col_block_end = idx_end // frames_per_column
-                if col_block_start != col_block_end:
-                    continue
-
-                row_pos_start = idx_start % frames_per_column
-                row_pos_end = idx_end % frames_per_column
-                x_offset = 0 if col_block_start == 0 else column_offset_x
-
-                y_start = first_frame_top_y_true + row_pos_start * frame_height_true
-                y_end = first_frame_top_y_true + row_pos_end * frame_height_true
-
-                cam_x = max(cell_x_positions_true.values()) + koma_width * 1.2 + x_offset
-
-                label = str(seg["label"]).strip()
-                bbox = draw.textbbox((0, 0), label, font=cam_font)
-                lw = bbox[2] - bbox[0]
-                lh = bbox[3] - bbox[1]
-
-                lx = cam_x - lw / 2
-                ly = y_start - frame_height_true + text_offset_y
-
-                draw.text((lx, ly), label, fill=(0, 0, 0, 255), font=cam_font)
-                draw.rectangle([
-                    lx - 2 * scale_w,
-                    ly - 2 * scale_h,
-                    lx + lw + 2 * scale_w,
-                    ly + lh + 2 * scale_h
-                ], outline=(0, 0, 0, 255), width=max(1, int(1.5 * scale_w)))
-
-                marker_x = cam_x - 6 * scale_w
-                marker_start_y = y_start
-                marker_end_y = y_end
-                draw.text((marker_x, marker_start_y), "▼", fill=(0, 0, 0, 255), font=cam_mark_font)
-                draw.text((marker_x, marker_end_y), "▲", fill=(0, 0, 0, 255), font=cam_mark_font)
-
-                prev_label = str(seg.get("prev_label", "") or "").strip()
-                next_label = str(seg.get("next_label", "") or "").strip()
-                if not prev_label:
-                    prev_label = find_nearest_non_action_label(extra_label_map, seg_start, search_before=True, max_distance=12)
-                if not next_label:
-                    next_label = find_nearest_non_action_label(extra_label_map, seg_end, search_before=False, max_distance=12)
-
-                if prev_label:
-                    pb = draw.textbbox((0, 0), prev_label, font=cam_state_font)
-                    pw = pb[2] - pb[0]
-                    draw.text((marker_x - pw - 6 * scale_w, marker_start_y), prev_label, fill=(0, 0, 0, 255), font=cam_state_font)
-                if next_label:
-                    draw.text((cam_x + 6 * scale_w, marker_end_y), next_label, fill=(0, 0, 0, 255), font=cam_state_font)
-
-                line_top = y_start + frame_height_true
-                line_bottom = y_end + frame_height_true
-                if line_bottom > line_top:
-                    stroke_px = max(1, int(3 * scale_w))
-                    if is_blur_like_label(label):
-                        amp = 0.08 * koma_width
-                        period = frame_height_true * 0.75
-                        draw_wavy_vertical(draw, cam_x, line_top, line_bottom, amplitude=amp, period_px=period, stroke=stroke_px)
-                    else:
-                        draw.line([(cam_x, line_top), (cam_x, line_bottom)], fill=(0, 0, 0, 255), width=stroke_px)
-
-        # ---- セリフ・文字ラベル（3コマ1音）----
-        if dialogue_events_all:
-            dialogue_font = safe_truetype(JP_FONT_PATH or FONT_PATH, size=max(10, int(base_font_size * 0.7 * scale_h)))
-            dialogue_x_base = max(cell_x_positions_true.values()) + koma_width * 0.25
-
-            for event in dialogue_events_all:
-                base_frame = int(event["frame"])
-                if not (start <= base_frame <= end):
-                    continue
-
-                morae = split_dialogue_mora(event["text"])
-                for mi, mora in enumerate(morae):
-                    target_frame = base_frame + (mi * 3)
-                    if not (start <= target_frame <= end):
-                        continue
-
-                    idx = (target_frame - 1) % frames_per_page
-                    col_block = idx // frames_per_column
-                    row_pos = idx % frames_per_column
-                    y = first_frame_top_y_true + row_pos * frame_height_true
-                    x_dialogue = dialogue_x_base if col_block == 0 else dialogue_x_base + column_offset_x
-                    draw.text((x_dialogue, y + text_offset_y), mora, fill=(0, 0, 0, 255), font=dialogue_font)
+        # ---- 通常セル（丸/三角 囲み対応）----
         for cell in valid_cells:
             x_base = cell_x_positions_true[cell]
             for _, row in df_page.iterrows():
@@ -1675,15 +1211,13 @@ with st.expander("セル名（A〜P）を入力", expanded=False):
         with cols[i % 4]:
             cell_labels[cell] = st.text_input(f"{cell} セルのラベル", value=default_labels[cell], key=f"label_{cell}")
 
-uploaded_file = st.file_uploader("CSV / XDTSファイルをアップロード", type=["csv", "xdts"])
+uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["csv"])
 
 if uploaded_file is not None:
     if st.button("タイムシート生成！"):
-        file_bytes = uploaded_file.read()
         pages, total_frames, counts = generate_timesheet(
-            file_bytes,
+            uploaded_file.read(),
             preset_cfg,
-            filename=uploaded_file.name,
             show_books=show_books,
             book_offset_koma=book_offset_koma,
             cell_labels=cell_labels,

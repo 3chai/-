@@ -1108,9 +1108,10 @@ def generate_timesheet(
 
     valid_cells = [c for c in CELLS_ALL if c in df.columns]
     extra_info_cols = get_extra_info_columns(df, valid_cells)
-    camera_info_cols = [c for c in extra_info_cols if is_camera_like_label(c)]
+    # いったん列ラベルでは絞らず、extra欄を全部カメラ解析対象にする
+    camera_info_cols = list(extra_info_cols)
     dialogue_label_cols = [c for c in extra_info_cols if is_dialogue_label_col(c)]
-    memo_label_cols = [c for c in extra_info_cols if c not in dialogue_label_cols and c not in camera_info_cols]
+    memo_label_cols = [c for c in extra_info_cols if c not in dialogue_label_cols]
     camera_segments = build_camera_segments(df, camera_info_cols)
     # '?'（半角/全角）を ● に変換（海外CSVの中割り表記対策）
     df = replace_question_with_circle(df, valid_cells)

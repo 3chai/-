@@ -33,10 +33,10 @@ presets = {
         "default_celllabel_koma": 1
     },
     "bones": {
-        "first_frame_top_y_true": 500,
-        "frame_height_true": 27,
-        "cell_x_positions_true": {cell: 67 + 24 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 892        ,
+        "first_frame_top_y_true": 527,
+        "frame_height_true": 26.5,
+        "cell_x_positions_true": {cell: 70 + 24 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 844,
         "true_width": 1754,
         "true_height": 2480,
         "default_book_koma": 5,

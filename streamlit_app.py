@@ -619,34 +619,80 @@ def collect_extra_label_events(df: pd.DataFrame, extra_cols):
     return frame_map
 
 
-def build_camera_action_segments(frame_label_map):
+# ==== PATCH: Insert helper functions after collect_extra_label_events ====
+def collect_extra_label_timeline(df: pd.DataFrame, extra_cols):
     """
-    frame->labels からカメラ系 action ラベルだけを区間化する。
-    1フレームでも action があれば区間として扱う。
-    戻り値: [{start,end,label}, ...]
+    extra列を時間順のイベント列に展開する。
+    戻り値: [{frame, label, col}, ...]
+    同一 frame / col / label の重複は除外する。
+    """
+    events = []
+    seen = set()
+    for _, row in df.iterrows():
+        frame = int(row["Frame"])
+        for col in extra_cols:
+            if col not in row.index:
+                continue
+            val = clean_extra_label_value(row[col])
+            if not val:
+                continue
+            key = (frame, col, val)
+            if key in seen:
+                continue
+            seen.add(key)
+            events.append({"frame": frame, "label": val, "col": col})
+    events.sort(key=lambda e: (e["frame"], str(e["col"]), str(e["label"])))
+    return events
+
+
+def is_short_state_label(text: str) -> bool:
+    n = unicodedata.normalize("NFKC", str(text)).strip()
+    return bool(re.fullmatch(r"[A-Za-z]{1,2}", n))
+
+
+# ==== PATCH: Replace build_camera_action_segments ====
+def build_camera_action_segments(label_timeline, max_frame: int):
+    """
+    ラベル時系列からカメラ系 action ごとに独立した区間を作る。
+    A PAN B PAN C のような並びでも、PAN を2区間として拾う。
+    end は次の非actionラベルの frame を優先し、見つからなければ start+4 まで伸ばす。
     """
     segments = []
-    active = {}  # label -> segment dict
-    for frame in sorted(frame_label_map.keys()):
-        labels = frame_label_map.get(frame, [])
-        action_labels = [lab for lab in labels if is_camera_action_label(lab)]
+    n = len(label_timeline)
+    for i, ev in enumerate(label_timeline):
+        label = str(ev["label"]).strip()
+        if not is_camera_action_label(label):
+            continue
 
-        current_set = set(action_labels)
-        active_set = set(active.keys())
+        start = int(ev["frame"])
 
-        # 終了したもの
-        for label in list(active_set - current_set):
-            segments.append(active.pop(label))
+        prev_label = ""
+        for j in range(i - 1, -1, -1):
+            cand = str(label_timeline[j]["label"]).strip()
+            if cand and not is_camera_action_label(cand):
+                prev_label = cand
+                break
 
-        # 継続 / 開始
-        for label in action_labels:
-            if label in active:
-                active[label]["end"] = frame
-            else:
-                active[label] = {"start": frame, "end": frame, "label": label}
+        next_label = ""
+        next_frame = None
+        for j in range(i + 1, n):
+            cand = str(label_timeline[j]["label"]).strip()
+            if cand and not is_camera_action_label(cand):
+                next_label = cand
+                next_frame = int(label_timeline[j]["frame"])
+                break
 
-    for label in list(active.keys()):
-        segments.append(active.pop(label))
+        end = next_frame if next_frame is not None else min(max_frame, start + 4)
+        if end < start:
+            end = start
+
+        segments.append({
+            "start": start,
+            "end": end,
+            "label": label,
+            "prev_label": prev_label,
+            "next_label": next_label,
+        })
 
     segments.sort(key=lambda d: (d["start"], d["label"]))
     return segments
@@ -671,20 +717,28 @@ def find_nearest_non_action_label(frame_label_map, center_frame: int, *, search_
     return ""
 
 
-def build_dialogue_events(frame_label_map):
+# ==== PATCH: Replace build_dialogue_events ====
+def build_dialogue_events(label_timeline):
     """
-    action ではない文字ラベルをセリフ候補としてイベント化する。
-    同じテキストが連続フレームで続いても開始フレームだけ返す。
+    action ではない文字ラベルのうち、短い状態ラベル（A/B/C など）を除いて
+    セリフ候補イベントにする。
+    同一 frame / text の重複は除外。
     """
     events = []
-    prev_texts = set()
-    for frame in sorted(frame_label_map.keys()):
-        texts = [lab for lab in frame_label_map[frame] if not is_camera_action_label(lab)]
-        current = set(texts)
-        for text in texts:
-            if text not in prev_texts:
-                events.append({"frame": frame, "text": text})
-        prev_texts = current
+    seen = set()
+    for ev in label_timeline:
+        text = str(ev["label"]).strip()
+        if not text:
+            continue
+        if is_camera_action_label(text):
+            continue
+        if is_short_state_label(text):
+            continue
+        key = (int(ev["frame"]), text)
+        if key in seen:
+            continue
+        seen.add(key)
+        events.append({"frame": int(ev["frame"]), "text": text})
     return events
 
 
@@ -1094,8 +1148,9 @@ def generate_timesheet(
     valid_cells = [c for c in CELLS_ALL if c in df.columns]
     extra_info_cols = get_extra_info_columns(df, valid_cells)
     extra_label_map = collect_extra_label_events(df, extra_info_cols)
-    camera_segments = build_camera_action_segments(extra_label_map)
-    dialogue_events_all = build_dialogue_events(extra_label_map)
+    extra_label_timeline = collect_extra_label_timeline(df, extra_info_cols)
+    camera_segments = build_camera_action_segments(extra_label_timeline, int(df['Frame'].max()))
+    dialogue_events_all = build_dialogue_events(extra_label_timeline)
     # '?'（半角/全角）を ● に変換（海外CSVの中割り表記対策）
     df = replace_question_with_circle(df, valid_cells)
     df = preprocess_cells(df, valid_cells)
@@ -1207,8 +1262,12 @@ def generate_timesheet(
                 draw.text((marker_x, marker_start_y), "▼", fill=(0, 0, 0, 255), font=cam_mark_font)
                 draw.text((marker_x, marker_end_y), "▲", fill=(0, 0, 0, 255), font=cam_mark_font)
 
-                prev_label = find_nearest_non_action_label(extra_label_map, seg_start, search_before=True, max_distance=12)
-                next_label = find_nearest_non_action_label(extra_label_map, seg_end, search_before=False, max_distance=12)
+                prev_label = str(seg.get("prev_label", "") or "").strip()
+                next_label = str(seg.get("next_label", "") or "").strip()
+                if not prev_label:
+                    prev_label = find_nearest_non_action_label(extra_label_map, seg_start, search_before=True, max_distance=12)
+                if not next_label:
+                    next_label = find_nearest_non_action_label(extra_label_map, seg_end, search_before=False, max_distance=12)
 
                 if prev_label:
                     pb = draw.textbbox((0, 0), prev_label, font=cam_state_font)

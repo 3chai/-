@@ -401,7 +401,17 @@ def preprocess_cells(df_raw, valid_cells):
 # XDTS support helpers
 def _normalize_xdts_cell_value(value):
     s = "" if value is None else str(value).strip()
-    if s in ("SYMBOL_NULL_CELL", "null", "None"):
+    # XDTS の記号プレースホルダは表示用の実文字ではないので空扱いにする
+    if s in (
+        "SYMBOL_NULL_CELL",
+        "SYMBOL_HYPHEN",
+        "SYMBOL_PERIOD",
+        "SYMBOL_COMMA",
+        "SYMBOL_SLASH",
+        "null",
+        "None",
+        ""
+    ):
         return ""
     return s
 
@@ -867,8 +877,11 @@ def build_camera_segments(df: pd.DataFrame, camera_cols):
             frame = int(row["Frame"])
             raw = row[col]
             val = "" if pd.isna(raw) else str(raw).strip()
-            if val and val != "×":
-                values.append((frame, val))
+            if not val or val == "×":
+                continue
+            if val.startswith("SYMBOL_"):
+                continue
+            values.append((frame, val))
 
         if not values:
             continue
@@ -888,8 +901,21 @@ def build_camera_segments(df: pd.DataFrame, camera_cols):
         grouped.append({"start": seg_start, "end": seg_prev_frame, "value": seg_val})
 
         for i, seg in enumerate(grouped):
-            prev_label = grouped[i - 1]["value"] if i - 1 >= 0 else ""
-            next_label = grouped[i + 1]["value"] if i + 1 < len(grouped) else ""
+            prev_label = ""
+            next_label = ""
+
+            for j in range(i - 1, -1, -1):
+                cand = str(grouped[j]["value"]).strip()
+                if cand and not is_camera_action_label(cand):
+                    prev_label = cand
+                    break
+
+            for j in range(i + 1, len(grouped)):
+                cand = str(grouped[j]["value"]).strip()
+                if cand and not is_camera_action_label(cand):
+                    next_label = cand
+                    break
+
             segments.append({
                 "col": col,
                 "start": seg["start"],
@@ -901,6 +927,11 @@ def build_camera_segments(df: pd.DataFrame, camera_cols):
                 "next_start": grouped[i + 1]["start"] if i + 1 < len(grouped) else None,
             })
     return segments
+def is_camera_state_label(text: str) -> bool:
+    n = unicodedata.normalize("NFKC", str(text)).strip()
+    if not n:
+        return False
+    return bool(re.fullmatch(r"[A-Za-z]+", n))
 
 # 三角の見た目調整
 TRIANGLE_NUDGE_Y = -0.9  # 負=上、正=下（px）
@@ -1224,11 +1255,11 @@ def generate_timesheet(
                 # ==== A / B / C などの状態ラベルを開始・終点に表示 ====
                 prev_label = str(seg.get("prev_label", "") or "").strip()
                 next_label = str(seg.get("next_label", "") or "").strip()
-                if prev_label and not is_camera_action_label(prev_label):
+                if prev_label and is_camera_state_label(prev_label):
                     pb = draw.textbbox((0, 0), prev_label, font=cam_state_font)
                     pw = pb[2] - pb[0]
                     draw.text((marker_x - pw - 6 * scale_w, marker_start_y), prev_label, fill=(0, 0, 0, 255), font=cam_state_font)
-                if next_label and not is_camera_action_label(next_label):
+                if next_label and is_camera_state_label(next_label):
                     draw.text((cam_x + 6 * scale_w, marker_end_y), next_label, fill=(0, 0, 0, 255), font=cam_state_font)
 
                 # ==== 縦線（▼の直下から▲の直前まで） ====

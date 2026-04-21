@@ -464,7 +464,7 @@ def read_xdts_flexibly(file_bytes):
             prev = None
             for i in range(len(df)):
                 cur = "" if pd.isna(df.at[i, col]) else str(df.at[i, col]).strip()
-                if cur and cur == prev:
+                if cur and cur == prev and cur not in ("×", "X", "x"):
                     df.at[i, col] = ""
                 elif cur:
                     prev = cur

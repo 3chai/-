@@ -392,9 +392,8 @@ def preprocess_cells(df_raw, valid_cells):
         for idx, row in df_raw.iterrows():
             val = str(row[cell]).strip()
             if val == "" or pd.isna(row[cell]):
-                if not seen_content:
-                    df_raw.at[idx, cell] = "×"
-                    seen_content = True
+                # 元々空だったセルは「×」として扱う
+                df_raw.at[idx, cell] = "×"
             else:
                 seen_content = True
     return df_raw

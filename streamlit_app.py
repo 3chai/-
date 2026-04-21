@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
-import math, re, io, os, unicodedata, zipfile
+import math, re, io, os, unicodedata, zipfile, json
 from typing import Optional
 
 # =============== 基本定義 ===============
@@ -384,6 +384,8 @@ def replace_question_with_circle(df: pd.DataFrame, valid_cells):
 
 def preprocess_cells(df_raw, valid_cells):
     for cell in valid_cells:
+        if cell not in df_raw.columns:
+            continue
         if df_raw[cell].astype(str).str.strip().replace("nan", "").eq("").all():
             continue
         seen_content = False
@@ -396,6 +398,109 @@ def preprocess_cells(df_raw, valid_cells):
             else:
                 seen_content = True
     return df_raw
+# XDTS support helpers
+def _normalize_xdts_cell_value(value):
+    s = "" if value is None else str(value).strip()
+    if s in ("SYMBOL_NULL_CELL", "null", "None"):
+        return ""
+    return s
+
+
+def read_xdts_flexibly(file_bytes):
+    """
+    XDTS（exchangeDigitalTimeSheet Save Data）を DataFrame に変換する。
+    現状は timeTables[0] の fieldId=0（セル列群）を対象に、
+    trackNo と timeTableHeaders の names を対応付けて 1フレームごとの表へ展開する。
+    """
+    try:
+        text = file_bytes.decode("utf-8-sig", errors="ignore")
+        marker = "exchangeDigitalTimeSheet Save Data"
+        if marker in text:
+            text = text.split(marker, 1)[1].strip()
+
+        data = json.loads(text)
+        time_tables = data.get("timeTables", [])
+        if not time_tables:
+            return pd.DataFrame()
+
+        table = time_tables[0]
+        duration = int(table.get("duration", 0) or 0)
+        if duration <= 0:
+            return pd.DataFrame()
+
+        header_map = {}
+        for header in table.get("timeTableHeaders", []):
+            field_id = header.get("fieldId")
+            names = header.get("names", []) or []
+            header_map[field_id] = [unicodedata.normalize("NFKC", str(n)).strip() for n in names]
+
+        target_field = None
+        for field in table.get("fields", []):
+            if field.get("fieldId") == 0:
+                target_field = field
+                break
+        if target_field is None:
+            return pd.DataFrame()
+
+        names = header_map.get(0, [])
+        tracks = target_field.get("tracks", [])
+        if not tracks:
+            return pd.DataFrame()
+
+        frame_count = duration
+        rows = [{"Frame": i + 1} for i in range(frame_count)]
+        df = pd.DataFrame(rows)
+
+        for track in tracks:
+            track_no = int(track.get("trackNo", -1))
+            if track_no < 0 or track_no >= len(names):
+                continue
+
+            col_name = names[track_no]
+            if not col_name:
+                continue
+
+            values = [""] * frame_count
+            events = sorted(track.get("frames", []), key=lambda fr: int(fr.get("frame", 0)))
+            if not events:
+                df[col_name] = values
+                continue
+
+            for idx, event in enumerate(events):
+                start = int(event.get("frame", 0))
+                next_start = int(events[idx + 1].get("frame", frame_count)) if idx + 1 < len(events) else frame_count
+
+                payloads = event.get("data", []) or []
+                raw_value = ""
+                if payloads:
+                    raw_value = ((payloads[0].get("values", []) or [""])[0])
+                value = _normalize_xdts_cell_value(raw_value)
+
+                start = max(0, start)
+                end = min(frame_count, next_start)
+                for frame_idx in range(start, end):
+                    if 0 <= frame_idx < frame_count:
+                        values[frame_idx] = value
+
+            df[col_name] = values
+
+        df.columns = [unicodedata.normalize("NFKC", str(c)).strip() for c in df.columns]
+        return df
+    except Exception as e:
+        st.error(f"XDTSの読み込みに失敗しました: {e}")
+        return pd.DataFrame()
+
+
+def read_timesheet_table(file_bytes, filename: str = ""):
+    """
+    CSV / XDTS を自動判定して DataFrame を返す。
+    """
+    name = (filename or "").lower()
+    head = file_bytes[:256]
+
+    if name.endswith(".xdts") or b"exchangeDigitalTimeSheet Save Data" in head:
+        return read_xdts_flexibly(file_bytes)
+    return read_csv_flexibly(file_bytes)
 
 def get_book_positions(df, valid_cells):
     cols = list(df.columns)
@@ -722,6 +827,7 @@ def y_for_frame(top_y: int, n_frame: int, frame_h: float, fps: int = 24) -> int:
 def generate_timesheet(
     file_bytes,
     preset,
+    filename="",
     show_books=True,
     book_offset_koma=6,
     cell_labels=None,
@@ -784,8 +890,8 @@ def generate_timesheet(
     if FONT_PATH is None:
         st.warning("英字フォントが見つかりませんでした。fonts/ に DejaVuSans.ttf を置くと描画が安定します。")
 
-    # CSV
-    df = read_csv_flexibly(file_bytes)
+    # CSV / XDTS
+    df = read_timesheet_table(file_bytes, filename=filename)
     if df.empty or 'Frame' not in df.columns:
         return [], 0, {"douga_count": 0, "genga_count": 0, "sankou_count": 0}
 
@@ -1211,13 +1317,15 @@ with st.expander("セル名（A〜P）を入力", expanded=False):
         with cols[i % 4]:
             cell_labels[cell] = st.text_input(f"{cell} セルのラベル", value=default_labels[cell], key=f"label_{cell}")
 
-uploaded_file = st.file_uploader("CSVファイルをアップロード", type=["csv"])
+uploaded_file = st.file_uploader("CSV / XDTSファイルをアップロード", type=["csv", "xdts"])
 
 if uploaded_file is not None:
     if st.button("タイムシート生成！"):
+        file_bytes = uploaded_file.read()
         pages, total_frames, counts = generate_timesheet(
-            uploaded_file.read(),
+            file_bytes,
             preset_cfg,
+            filename=uploaded_file.name,
             show_books=show_books,
             book_offset_koma=book_offset_koma,
             cell_labels=cell_labels,

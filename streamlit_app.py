@@ -1162,27 +1162,9 @@ def generate_timesheet(
                         font=extra_font
                     )
 
-        # ---- カメラ系ラベル（箱ラベル + 開始/終了マーカー + 縦線）----
+        # ---- カメラ系ラベル（BOOK風 + ギャップ線流用）----
         if camera_info_cols and camera_segments:
-            cam_font = safe_truetype(JP_FONT_PATH or FONT_PATH, size=max(10, int(base_font_size * 0.55 * scale_h)))
-            cam_small_font = safe_truetype(JP_FONT_PATH or FONT_PATH, size=max(9, int(base_font_size * 0.46 * scale_h)))
-            cam_x_base = max(cell_x_positions_true.values()) + koma_width * 0.95
-            cam_lane_gap = max(16, int(koma_width * 0.95))
-            cam_label_gap_y = max(8, int(8 * scale_h))
-            cam_marker_gap_x = max(8, int(9 * scale_w))
-            cam_cols_sorted = sorted(camera_info_cols)
-            cam_lane_x = {
-                col: cam_x_base + i * cam_lane_gap
-                for i, col in enumerate(cam_cols_sorted)
-            }
-
-            def frame_to_page_xy(target_frame: int):
-                idx = (target_frame - 1) % frames_per_page
-                col_block = idx // frames_per_column
-                row_pos = idx % frames_per_column
-                y = first_frame_top_y_true + row_pos * frame_height_true
-                x_offset = 0 if col_block == 0 else column_offset_x
-                return row_pos, y, x_offset
+            cam_font = label_font  # ← BOOKと同じ見た目
 
             for seg in camera_segments:
                 if not is_camera_action_label(seg["label"]):
@@ -1192,56 +1174,59 @@ def generate_timesheet(
 
                 seg_start = max(seg["start"], start)
                 seg_end = min(seg["end"], end)
-                lane_x_base = cam_lane_x.get(seg["col"], cam_x_base)
 
-                _, y_start, start_x_offset = frame_to_page_xy(seg_start)
-                _, y_end, end_x_offset = frame_to_page_xy(seg_end)
+                # ==== コマ位置計算（既存セルと完全一致させる）====
+                idx_start = (seg_start - 1) % frames_per_page
+                col_block = idx_start // frames_per_column
+                row_pos = idx_start % frames_per_column
 
-                if start_x_offset != end_x_offset:
-                    continue
+                base_y = first_frame_top_y_true + row_pos * frame_height_true
+                x_offset = 0 if col_block == 0 else column_offset_x
 
-                x_lane = lane_x_base + start_x_offset
-                y_top = y_start + text_offset_y + int(10 * scale_h)
-                y_bottom = y_end + text_offset_y + int(10 * scale_h)
-                stroke_px = max(1, int(2 * scale_w))
+                # X位置は一番右の外に固定
+                cam_x = max(cell_x_positions_true.values()) + koma_width * 1.2 + x_offset
 
-                label_text = str(seg["label"]).strip()
-                label_bbox = draw.textbbox((0, 0), label_text, font=cam_font)
-                label_w = label_bbox[2] - label_bbox[0]
-                label_h = label_bbox[3] - label_bbox[1]
-                box_pad_x = 4 * scale_w
-                box_pad_y = 2 * scale_h
-                box_x1 = x_lane - (label_w / 2) - box_pad_x
-                box_y1 = y_top - label_h - cam_label_gap_y - box_pad_y
-                box_x2 = x_lane + (label_w / 2) + box_pad_x
-                box_y2 = y_top - cam_label_gap_y + box_pad_y
-                draw.rectangle([box_x1, box_y1, box_x2, box_y2], outline=(0, 0, 0, 255), width=max(1, int(1.5 * scale_w)))
-                draw.text((x_lane - label_w / 2, box_y1 + box_pad_y - 1 * scale_h), label_text, fill=(0, 0, 0, 255), font=cam_font)
+                # ==== BOOKと同じ描画 ==== 
+                label = str(seg["label"]).strip()
 
-                start_marker = "▼"
-                end_marker = "▲"
-                draw.text((x_lane - 4 * scale_w, y_top - 7 * scale_h), start_marker, fill=(0, 0, 0, 255), font=cam_small_font)
-                draw.text((x_lane - 4 * scale_w, y_bottom - 2 * scale_h), end_marker, fill=(0, 0, 0, 255), font=cam_small_font)
+                bbox = draw.textbbox((0, 0), label, font=cam_font)
+                lw = bbox[2] - bbox[0]
+                lh = bbox[3] - bbox[1]
 
-                prev_label = str(seg.get("prev_label", "")).strip()
-                next_label = str(seg.get("next_label", "")).strip()
-                if prev_label and not is_camera_action_label(prev_label):
-                    draw.text((x_lane - cam_marker_gap_x - 10 * scale_w, y_top - 5 * scale_h), prev_label, fill=(0, 0, 0, 255), font=cam_small_font)
-                if next_label and not is_camera_action_label(next_label):
-                    draw.text((x_lane + cam_marker_gap_x, y_bottom - 2 * scale_h), next_label, fill=(0, 0, 0, 255), font=cam_small_font)
+                lx = cam_x - lw/2
+                ly = base_y - frame_height_true * book_offset_koma
 
-                line_start = y_top + max(6, int(7 * scale_h))
-                line_end = y_bottom - max(4, int(4 * scale_h))
-                if line_end > line_start:
-                    if is_blur_like_label(label_text):
-                        amp = max(3, 0.08 * koma_width)
-                        period = frame_height_true * 0.75
-                        draw_wavy_vertical(draw, x_lane, line_start, line_end, amplitude=amp, period_px=period, stroke=stroke_px)
-                    else:
-                        draw_dashed_vertical(draw, x_lane, line_start, line_end,
-                                             dash_len=max(5, frame_height_true * 0.7),
-                                             gap_len=max(3, frame_height_true * 0.25),
-                                             stroke=stroke_px)
+                draw.text((lx, ly), label, fill=(0,0,0,255), font=cam_font)
+                draw.rectangle([
+                    lx - 2*scale_w,
+                    ly - 2*scale_h,
+                    lx + lw + 2*scale_w,
+                    ly + lh + 2*scale_h
+                ], outline=(0,0,0,255), width=max(1,int(1.5*scale_w)))
+
+                # ==== ▼ ▲ ==== 
+                start_idx = (seg_start - 1) % frames_per_page
+                end_idx = (seg_end - 1) % frames_per_page
+
+                start_row = start_idx % frames_per_column
+                end_row = end_idx % frames_per_column
+
+                y_start = first_frame_top_y_true + start_row * frame_height_true
+                y_end = first_frame_top_y_true + end_row * frame_height_true
+
+                draw.text((cam_x - 6*scale_w, y_start), "▼", fill=(0,0,0,255), font=font_small)
+                draw.text((cam_x - 6*scale_w, y_end), "▲", fill=(0,0,0,255), font=font_small)
+
+                # ==== 線（既存ロジック流用）====
+                line_top = y_start + frame_height_true
+                line_bottom = y_start + frame_height_true * 5
+
+                if is_blur_like_label(label):
+                    amp = 0.08 * koma_width
+                    period = frame_height_true * 0.75
+                    draw_wavy_vertical(draw, cam_x, line_top, line_bottom, amplitude=amp, period_px=period, stroke=max(1,int(3*scale_w)))
+                else:
+                    draw.line([(cam_x, line_top), (cam_x, line_bottom)], fill=(0,0,0,255), width=max(1,int(3*scale_w)))
         if dialogue_label_cols:
             dialogue_font = safe_truetype(JP_FONT_PATH or FONT_PATH, size=max(10, int(base_font_size * 0.7 * scale_h)))
             dialogue_x_base = max(cell_x_positions_true.values()) + koma_width * 0.25

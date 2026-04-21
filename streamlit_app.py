@@ -34,9 +34,9 @@ presets = {
     },
     "bones": {
         "first_frame_top_y_true": 527,
-        "frame_height_true": 26.2,
+        "frame_height_true": 26.1.5,
         "cell_x_positions_true": {cell: 72 + 24.5 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 824,
+        "column_offset_x": 826,
         "true_width": 1754,
         "true_height": 2480,
         "default_book_koma": 5,

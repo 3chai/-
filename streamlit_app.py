@@ -25,10 +25,20 @@ presets = {
     "BELLNOX FILMS": {
         "first_frame_top_y_true": 1383,
         "frame_height_true": 47.28,
-        "cell_x_positions_true": {cell: 88   + 61 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 88 + 61 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1703,
         "true_width": 3509,
         "true_height": 4961,
+        "default_book_koma": 5,
+        "default_celllabel_koma": 1
+    },
+    "bones": {
+        "first_frame_top_y_true": 500,
+        "frame_height_true": 27,
+        "cell_x_positions_true": {cell: 67 + 24 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 892        ,
+        "true_width": 1754,
+        "true_height": 2480,
         "default_book_koma": 5,
         "default_celllabel_koma": 1
     },

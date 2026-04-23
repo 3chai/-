@@ -49,7 +49,7 @@ presets = {
         "column_offset_x": 827,
         "true_width": 1754,
         "true_height": 2480,
-        "default_book_koma": 5,
+        "default_book_koma": 6,
         "default_celllabel_koma": 1
     },
     "CygamesPictures": {

@@ -52,6 +52,17 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 1
     },
+        "CloverWorks": {
+        "first_frame_top_y_true": 638.0,
+        "frame_height_true": 24.4,
+        "cell_x_positions_true": {cell: 44.0 + 29.7 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 850.0,
+        "true_width": 1753,
+        "true_height": 2480,
+        "template_path": "templates/CloverWorks.jpg",
+        "default_book_koma": 6,
+        "default_celllabel_koma": 1,
+    },
     "CygamesPictures": {
         "first_frame_top_y_true": 779,
         "frame_height_true": 33.98 ,
@@ -111,6 +122,18 @@ presets = {
         "true_height": 5787 ,
         "default_book_koma": 4,
         "default_celllabel_koma": 1
+    },
+        "キネマシトラス": {
+        "first_frame_top_y_true": 534.0,
+        "frame_height_true": 26.15,
+        "cell_x_positions_true": {cell: 57.0 + 25.0 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 851.0,
+        "true_width": 1755,
+        "true_height": 2482,
+        "default_book_koma": 5,
+        "default_celllabel_koma": 1,
+        "default_memo_x": 120,
+        "default_memo_y": 120,
     },
     "サイエンスSARU": {
         "first_frame_top_y_true": 638.3,

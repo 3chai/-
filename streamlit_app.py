@@ -12,6 +12,19 @@ cell_offsets = {
 CELLS_ALL = list(cell_offsets.keys())
 
 presets = {
+    "トムス": {
+        "first_frame_top_y_true": 450.0,
+        "frame_height_true": 25.5,
+        "cell_x_positions_true": {cell: 61 + 25.11711409395973 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 809.5374720357942,
+        "true_width": 1682,
+        "true_height": 2370,
+        "template_path": "templates/トムス.jpg",
+        "default_book_koma": 6,
+        "default_celllabel_koma": 2,
+        "default_memo_x": 120,
+        "default_memo_y": 120,
+    },
     "Andraft": {
         "first_frame_top_y_true": 1279,
         "frame_height_true": 49.6,

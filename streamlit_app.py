@@ -19,7 +19,6 @@ presets = {
         "column_offset_x": 809.5374720357942,
         "true_width": 1682,
         "true_height": 2370,
-        "template_path": "templates/トムス.jpg",
         "default_book_koma": 6,
         "default_celllabel_koma": 2,
         "default_memo_x": 120,

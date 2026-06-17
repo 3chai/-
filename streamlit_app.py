@@ -15,7 +15,7 @@ presets = {
     "トムス": {
         "first_frame_top_y_true": 450.0,
         "frame_height_true": 25.5,
-        "cell_x_positions_true": {cell: 61 + 25.11711409395973 * offset for cell, offset in cell_offsets.items()},
+        "cell_x_positions_true": {cell: 61 + 22 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 809.5374720357942,
         "true_width": 1682,
         "true_height": 2370,

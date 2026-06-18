@@ -129,7 +129,7 @@ presets = {
         "first_frame_top_y_true": 582,
         "frame_height_true": 31.21,
         "cell_x_positions_true": {cell: 35 + 27.77 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 1027,
+        "column_offset_x": 1030,
         "true_width": 2024,
         "true_height": 2866 ,
         "default_book_koma": 6,

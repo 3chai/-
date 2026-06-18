@@ -64,7 +64,7 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 1
     },
-        "CloverWorks": {
+    "CloverWorks": {
         "first_frame_top_y_true": 638.0,
         "frame_height_true": 24.4,
         "cell_x_positions_true": {cell: 44.0 + 29.7 * offset for cell, offset in cell_offsets.items()},
@@ -125,6 +125,16 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
+        "Studio MAGICPOT.": {
+        "first_frame_top_y_true": 582,
+        "frame_height_true": 31.10,
+        "cell_x_positions_true": {cell: 37.92 + 27.77 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1027,
+        "true_width": 2024,
+        "true_height": 2866 ,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 2
+    },
     "100studio": {
         "first_frame_top_y_true": 1064,
         "frame_height_true": 63.4,
@@ -135,7 +145,7 @@ presets = {
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     },
-        "キネマシトラス": {
+    "キネマシトラス": {
         "first_frame_top_y_true": 534.0,
         "frame_height_true": 26.15,
         "cell_x_positions_true": {cell: 57.0 + 25.0 * offset for cell, offset in cell_offsets.items()},

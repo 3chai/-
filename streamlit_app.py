@@ -115,6 +115,16 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
+    "PINEJAM": {
+        "first_frame_top_y_true": 844.71,
+        "frame_height_true": 31.15,
+        "cell_x_positions_true": {cell: 85.5 + 35.50 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1125,
+        "true_width": 2340,
+        "true_height": 3310 ,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 2
+    },
     "Voil": {
         "first_frame_top_y_true": 559,
         "frame_height_true": 25.6,

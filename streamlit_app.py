@@ -1005,6 +1005,7 @@ def generate_timesheet(
     circle_outline_alpha=CIRCLE_OUTLINE_ALPHA,
     alpha_all_triangle=False,
     use_three_second_sheet=False,
+    enable_repeat_display=True,
 ):
     # 入力一発 → セル参照・英字付きトークン・数字セットに分解
     triangle_cell_refs, triangle_alpha_tokens, triangle_numbers = parse_triangle_spec(mixed_triangle_str)
@@ -1132,11 +1133,14 @@ def generate_timesheet(
         # ---- 通常セル（丸/三角 囲み対応）----
         for cell in valid_cells:
             x_base = cell_x_positions_true[cell]
-            repeat_start_text_by_frame, repeat_skip_frames = build_vertical_repeat_maps(df_page, cell, frames_per_column)
+            if enable_repeat_display:
+                repeat_start_text_by_frame, repeat_skip_frames = build_vertical_repeat_maps(df_page, cell, frames_per_column)
+            else:
+                repeat_start_text_by_frame, repeat_skip_frames = {}, set()
             for _, row in df_page.iterrows():
                 frame = int(row['Frame'])
                 timing = str(row[cell]) if not pd.isna(row[cell]) else ""
-                display_timing = repeat_start_text_by_frame.get(frame, format_repeat_display_text(timing))
+                display_timing = repeat_start_text_by_frame.get(frame, format_repeat_display_text(timing)) if enable_repeat_display else timing
                 idx = (frame-1) % frames_per_page
                 col_block = idx // frames_per_column
                 row_pos = idx % frames_per_column
@@ -1503,14 +1507,16 @@ preset_cfg = presets[selected_preset]
 default_book_koma = preset_cfg.get("default_book_koma", 6)
 default_celllabel_koma = preset_cfg.get("default_celllabel_koma", 2)
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 with c1:
     show_books = st.checkbox("Bookを描画する", value=True)
 with c2:
     use_three_second_sheet = st.checkbox("3秒タイムシート", value=False)
 with c3:
-    book_offset_koma = st.slider("Bookの高さ（何コマ上）", 0, 12, int(default_book_koma), 1)
+    enable_repeat_display = st.checkbox("リピート省略表示", value=True)
 with c4:
+    book_offset_koma = st.slider("Bookの高さ（何コマ上）", 0, 12, int(default_book_koma), 1)
+with c5:
     celllabel_koma = st.slider("セル名の高さ（何コマ上）", 0, 6, int(default_celllabel_koma), 1)
 
 # 丸/三角設定（入力はひとつだけ）
@@ -1561,6 +1567,7 @@ if uploaded_file is not None:
             circle_outline_alpha=circle_outline_alpha,
             alpha_all_triangle=alpha_all_triangle,
             use_three_second_sheet=use_three_second_sheet,
+            enable_repeat_display=enable_repeat_display,
         )
         if not pages:
             st.warning("有効なFrameデータが見つかりませんでした。")

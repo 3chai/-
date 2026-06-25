@@ -85,6 +85,16 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 3
     },
+    "ENGI": {
+        "first_frame_top_y_true": 922.94,
+        "frame_height_true": 31.58 ,
+        "cell_x_positions_true": {cell: 61.50 + 39.20 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1130.00,
+        "true_width": 2340,
+        "true_height": 3307,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 3
+    },
     "J.C.STAFF": {
         "first_frame_top_y_true": 731,
         "frame_height_true": 34.65,

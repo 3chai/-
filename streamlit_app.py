@@ -531,20 +531,49 @@ def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
         draw.text((bottom_x - w/2.0, y), ch, fill=(0,0,0,255), font=font)
         y += h + spacing
 
-# --- 1コマ1文字でリピート表示を縦に描く ---
-def draw_repeat_vertical_by_koma(draw, text, center_x, start_y, frame_height, font, spacing_nudge_y=0):
+# --- リピート表示を「止め」と同じ描き方で縦に描く ---
+def draw_repeat_like_stop(draw, text, center_x, base_y, frame_height, text_offset_y,
+                          font, scale_h=1.0, scale_w=1.0, stroke_px=3,
+                          line_frames=4.0):
     """
-    リピート表示を、止め文字のように1コマに1文字ずつ縦に描く。
-    例: 12341234リピート -> 1 / 2 / 3 / 4 / ... / リ / ピ / ｜ / ト
+    リピート表示を、止め文字と同じ考え方で1コマ1文字ずつ縦に描く。
+    例: 123123リピート -> 1 / 2 / 3 / 1 / 2 / 3 / リ / ピ / ｜ / ト / 縦棒
     """
     if not text:
         return
+
     text = normalize_for_vertical(str(text))
+
+    def top_like_number(koma_index_from_current: int) -> float:
+        koma_top = base_y + frame_height * koma_index_from_current
+        return koma_top + text_offset_y + (NUM1_NUDGE_Y * scale_h)
+
+    last_bottom = None
     for i, ch in enumerate(text):
-        y = start_y + (frame_height * i) + spacing_nudge_y
+        y_top_like = top_like_number(i) - 3
         bbox = draw.textbbox((0, 0), ch, font=font)
-        w = bbox[2] - bbox[0]
-        draw.text((center_x - w / 2.0, y), ch, fill=(0, 0, 0, 255), font=font)
+        h = bbox[3] - bbox[1]
+        draw_vertical_bottom(
+            draw,
+            ch,
+            bottom_x=center_x,
+            bottom_y=y_top_like + h,
+            font=font,
+            spacing=0,
+        )
+        last_bottom = y_top_like + h
+
+    if last_bottom is None:
+        return
+
+    # 「止め」の線と同じように、文字の直下から縦棒で継続を示す
+    y_top = last_bottom + (20 * scale_h)
+    y_bottom = y_top + frame_height * line_frames
+    draw.line(
+        [(center_x, y_top), (center_x, y_bottom)],
+        fill=(0, 0, 0, 255),
+        width=max(1, int(stroke_px)),
+    )
 
 # 縦書きテキストの総高さを測る（文字間隔含む）
 def vertical_text_total_height(draw, text, font, spacing=0):
@@ -1080,21 +1109,39 @@ def generate_timesheet(
                     else:
                         font = font_small if len(timing) >= 3 else font_large
 
-                # リピート表示は日本語を含むので、止め文字と同じ日本語フォントで描画する
-                # 数字用フォントのままだと環境によって「リピート」が文字化けする
+                # リピート表示は「止め」と同じ描き方・同じ日本語フォントで描画する
                 is_repeat_display = (display_timing != timing and "リピート" in display_timing)
                 if is_repeat_display:
-                    font = safe_truetype(JP_FONT_PATH, size=int(base_font_size * scale_h * THREE_PLUS_SCALE))
-                    # 止め文字と同じように、セル欄へ1コマ1文字で縦に流す
-                    repeat_center_x = x + (koma_width * 0.35)
-                    draw_repeat_vertical_by_koma(
+                    # 同じリピート文字列が前コマから続いている場合は、重ね描きしない
+                    prev_same = False
+                    try:
+                        prev_row = df[(df['Frame'] == frame - 1)]
+                        if not prev_row.empty and cell in prev_row.columns:
+                            prev_val = str(prev_row.iloc[0][cell]).strip()
+                            prev_same = (prev_val == timing)
+                    except Exception:
+                        prev_same = False
+                    if prev_same:
+                        continue
+
+                    font = jp_font_large
+
+                    # 丸/三角の中心と同じく、文字のbbox中心を基準にする
+                    tb = draw.textbbox((x, y_draw), display_timing, font=font)
+                    repeat_center_x = (tb[0] + tb[2]) / 2.0
+
+                    draw_repeat_like_stop(
                         draw,
                         display_timing,
                         center_x=repeat_center_x,
-                        start_y=y_draw,
+                        base_y=y,
                         frame_height=frame_height_true,
+                        text_offset_y=text_offset_y,
                         font=font,
-                        spacing_nudge_y=-3 * scale_h,
+                        scale_h=scale_h,
+                        scale_w=scale_w,
+                        stroke_px=max(1, int(3 * scale_w)),
+                        line_frames=4.0,
                     )
                     continue
 

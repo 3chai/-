@@ -717,10 +717,17 @@ def build_vertical_repeat_maps(df_page: pd.DataFrame, cell: str, frames_per_colu
 
         if best:
             total_len, unit_len, repeat_count = best
-            first_two = ''.join(rows[i + k][1] for k in range(unit_len * 2))
-            repeat_start_text_by_frame[frame_i] = f"{first_two}リピート"
-            for k in range(total_len):
-                repeat_skip_frames.add(rows[i + k][0])
+            # 最低2回分（例: 123123）は通常の数字として描く。
+            # その後の繰り返し部分だけを「リピート」＋止め棒で省略する。
+            first_two_len = unit_len * 2
+            marker_index = i + first_two_len
+
+            if marker_index < i + total_len:
+                marker_frame = rows[marker_index][0]
+                repeat_start_text_by_frame[marker_frame] = "リピート"
+                for k in range(first_two_len, total_len):
+                    repeat_skip_frames.add(rows[i + k][0])
+
             i += total_len
         else:
             i += 1

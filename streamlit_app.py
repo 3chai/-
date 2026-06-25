@@ -670,8 +670,9 @@ def build_vertical_repeat_maps(df_page: pd.DataFrame, cell: str, frames_per_colu
         except Exception:
             continue
         val = "" if pd.isna(r[cell]) else str(r[cell]).strip()
-        idx = (frame - 1) % frames_per_column
-        col_block = idx // frames_per_column  # 通常は0。将来の安全用。
+        # 描画時と同じ列判定にする（1ページ内で左列/右列を区別）
+        idx_in_page = (frame - 1) % (frames_per_column * 2)
+        col_block = idx_in_page // frames_per_column
         rows.append((frame, val, col_block))
 
     n = len(rows)
@@ -1211,8 +1212,18 @@ def generate_timesheet(
 
                     font = jp_font_large
 
-                    # 丸/三角の中心と同じく、文字のbbox中心を基準にする
-                    tb = draw.textbbox((x, y_draw), display_timing, font=font)
+                    # 元の数字が乗る位置の中心に合わせる（止め線と同じ考え方）。
+                    # display_timing（リピート）の文字幅で中心を取ると、1セル分右にズレやすい。
+                    original_font = font
+                    if re.fullmatch(r"\d+", timing or ""):
+                        nlen_for_center = len(timing)
+                        if nlen_for_center == 1:
+                            original_font = font_large
+                        elif nlen_for_center == 2:
+                            original_font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * TWO_DIGIT_SCALE))
+                        else:
+                            original_font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * THREE_PLUS_SCALE))
+                    tb = draw.textbbox((x, y_draw), timing, font=original_font)
                     repeat_center_x = (tb[0] + tb[2]) / 2.0
 
                     draw_repeat_like_stop(

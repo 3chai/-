@@ -646,6 +646,87 @@ def format_repeat_display_text(timing: str) -> str:
 
     return str(timing)
 
+
+def build_vertical_repeat_maps(df_page: pd.DataFrame, cell: str, frames_per_column: int):
+    """
+    タイムシート上で下方向に 1,2,3,1,2,3... のように並ぶリピートを検出する。
+    戻り値:
+      repeat_start_text_by_frame: {開始Frame: "123123リピート"}
+      repeat_skip_frames: {通常描画をしないFrame...}
+
+    ※単一数字の連続（1,1,1...）は止め処理に任せるため unit_len=1 は検出しない。
+    ※列をまたぐ検出はしない（縦棒が隣列へ飛ばないようにする）。
+    """
+    repeat_start_text_by_frame = {}
+    repeat_skip_frames = set()
+
+    if cell not in df_page.columns or df_page.empty:
+        return repeat_start_text_by_frame, repeat_skip_frames
+
+    rows = []
+    for _, r in df_page.sort_values('Frame').iterrows():
+        try:
+            frame = int(r['Frame'])
+        except Exception:
+            continue
+        val = "" if pd.isna(r[cell]) else str(r[cell]).strip()
+        idx = (frame - 1) % frames_per_column
+        col_block = idx // frames_per_column  # 通常は0。将来の安全用。
+        rows.append((frame, val, col_block))
+
+    n = len(rows)
+    i = 0
+    while i < n:
+        frame_i, val_i, col_i = rows[i]
+        if frame_i in repeat_skip_frames or not re.fullmatch(r"\d+", val_i or ""):
+            i += 1
+            continue
+
+        best = None  # (total_len, unit_len, repeat_count)
+        max_unit = min(12, (n - i) // 2)
+        for unit_len in range(2, max_unit + 1):
+            unit_vals = [rows[i + k][1] for k in range(unit_len)]
+            unit_frames = [rows[i + k][0] for k in range(unit_len)]
+            unit_cols = [rows[i + k][2] for k in range(unit_len)]
+            if any(not re.fullmatch(r"\d+", v or "") for v in unit_vals):
+                continue
+            if len(set(unit_cols)) != 1:
+                continue
+            if any(unit_frames[k] != unit_frames[0] + k for k in range(unit_len)):
+                continue
+
+            repeat_count = 1
+            pos = i + unit_len
+            while pos + unit_len <= n:
+                ok = True
+                for k in range(unit_len):
+                    f, v, c = rows[pos + k]
+                    if c != col_i or f != rows[pos][0] + k or v != unit_vals[k]:
+                        ok = False
+                        break
+                if not ok:
+                    break
+                repeat_count += 1
+                pos += unit_len
+
+            if repeat_count >= 2:
+                total_len = unit_len * repeat_count
+                # 最短単位を優先しつつ、同じ単位なら長い範囲を採る
+                if best is None or unit_len < best[1] or (unit_len == best[1] and total_len > best[0]):
+                    best = (total_len, unit_len, repeat_count)
+
+        if best:
+            total_len, unit_len, repeat_count = best
+            first_two = ''.join(rows[i + k][1] for k in range(unit_len * 2))
+            repeat_start_text_by_frame[frame_i] = f"{first_two}リピート"
+            for k in range(total_len):
+                repeat_skip_frames.add(rows[i + k][0])
+            i += total_len
+        else:
+            i += 1
+
+    return repeat_start_text_by_frame, repeat_skip_frames
+
 def build_gap_markers(df: pd.DataFrame, valid_cells, threshold: int = 4, last_frame: Optional[int] = None):
     """
     各セル列について、連続する非空同士のギャップが threshold 以上なら
@@ -1041,16 +1122,21 @@ def generate_timesheet(
         # ---- 通常セル（丸/三角 囲み対応）----
         for cell in valid_cells:
             x_base = cell_x_positions_true[cell]
+            repeat_start_text_by_frame, repeat_skip_frames = build_vertical_repeat_maps(df_page, cell, frames_per_column)
             for _, row in df_page.iterrows():
                 frame = int(row['Frame'])
                 timing = str(row[cell]) if not pd.isna(row[cell]) else ""
-                display_timing = format_repeat_display_text(timing)
+                display_timing = repeat_start_text_by_frame.get(frame, format_repeat_display_text(timing))
                 idx = (frame-1) % frames_per_page
                 col_block = idx // frames_per_column
                 row_pos = idx % frames_per_column
                 y = first_frame_top_y_true + row_pos*frame_height_true
                 x = x_base if col_block==0 else x_base + column_offset_x
                 y_draw = y + text_offset_y
+
+                # 縦方向リピートの途中コマは、通常の数字を描かない
+                if frame in repeat_skip_frames and frame not in repeat_start_text_by_frame:
+                    continue
 
                 # 記号の扱い
                 if timing in ('●','○','〇'):
@@ -1112,16 +1198,8 @@ def generate_timesheet(
                 # リピート表示は「止め」と同じ描き方・同じ日本語フォントで描画する
                 is_repeat_display = (display_timing != timing and "リピート" in display_timing)
                 if is_repeat_display:
-                    # 同じリピート文字列が前コマから続いている場合は、重ね描きしない
-                    prev_same = False
-                    try:
-                        prev_row = df[(df['Frame'] == frame - 1)]
-                        if not prev_row.empty and cell in prev_row.columns:
-                            prev_val = str(prev_row.iloc[0][cell]).strip()
-                            prev_same = (prev_val == timing)
-                    except Exception:
-                        prev_same = False
-                    if prev_same:
+                    # 縦方向リピートの途中コマは、元数字を通常描画しない
+                    if frame in repeat_skip_frames and frame not in repeat_start_text_by_frame:
                         continue
 
                     font = jp_font_large

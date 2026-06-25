@@ -386,6 +386,19 @@ def parse_triangle_spec(s: str):
 
     return cell_refs, alpha_tokens, numbers
 
+
+# =============== 除外指定パーサー ===============
+def parse_exclude_spec(s: str):
+    """
+    'A1, A10a, C24, 3, 5-7, 10a' などを一括で解釈。
+    中口（ナカクチ）など、丸/三角を付けず枚数カウントからも外したい番号用。
+    戻り値: (exclude_cell_refs, exclude_alpha_tokens, exclude_numbers)
+      - exclude_cell_refs: {'A1', 'A10a', 'C24', ...}  ※セル優先
+      - exclude_alpha_tokens: {'10a', '7b', ...}       ※全セルで英字付き
+      - exclude_numbers: {3,5,6,7,...}                 ※全セルで数字のみ
+    """
+    return parse_triangle_spec(s)
+
 # =============== ユーティリティ ===============
 def parse_mixed_triangle_targets(s: str):
     """
@@ -628,7 +641,8 @@ def build_gap_markers(df: pd.DataFrame, valid_cells, threshold: int = 4, last_fr
 
 # =================== 枚数カウントヘルパー ===================
 def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, triangle_alpha_tokens,
-                         triangle_numbers, alpha_all_triangle=False):
+                         triangle_numbers, exclude_cell_refs=None, exclude_alpha_tokens=None,
+                         exclude_numbers=None, alpha_all_triangle=False):
     """
     タイムシート情報から枚数を集計する。
       - douga_count: 動画枚数（中割り点 + 同じセル内の重複を除いた数字/数字+英字の合計）
@@ -638,6 +652,9 @@ def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, tria
     douga_count = 0
     genga_count = 0
     sankou_count = 0
+    exclude_cell_refs = exclude_cell_refs or set()
+    exclude_alpha_tokens = exclude_alpha_tokens or set()
+    exclude_numbers = exclude_numbers or set()
 
     for cell in valid_cells:
         if cell not in df.columns:
@@ -671,8 +688,20 @@ def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, tria
                     continue
                 seen_tokens.add(token)
 
-                douga_count += 1
                 cell_tok = f"{cell}{token}"
+
+                is_excluded = (
+                    (cell_tok in exclude_cell_refs) or
+                    (suffix and (token in exclude_alpha_tokens)) or
+                    ((not suffix) and (int(num_text) in exclude_numbers))
+                )
+
+                if is_excluded:
+                    # 中口は動画枚数には含めるが、原画・参考枚数には含めない
+                    douga_count += 1
+                    continue
+
+                douga_count += 1
 
                 is_triangle = (
                     (cell_tok in triangle_cell_refs) or
@@ -803,6 +832,7 @@ def generate_timesheet(
     celllabel_koma=2,
     target_cell_for_enclose="A",
     mixed_triangle_str="",
+    exclude_enclose_str="",
     enc_pad_w=ENC_PAD_W,
     enc_pad_h=ENC_PAD_H,
     enc_stroke=ENC_STROKE,
@@ -813,6 +843,7 @@ def generate_timesheet(
 ):
     # 入力一発 → セル参照・英字付きトークン・数字セットに分解
     triangle_cell_refs, triangle_alpha_tokens, triangle_numbers = parse_triangle_spec(mixed_triangle_str)
+    exclude_cell_refs, exclude_alpha_tokens, exclude_numbers = parse_exclude_spec(exclude_enclose_str)
 
     # プリセット
     true_width = preset["true_width"]; true_height = preset["true_height"]
@@ -882,6 +913,9 @@ def generate_timesheet(
         triangle_cell_refs,
         triangle_alpha_tokens,
         triangle_numbers,
+        exclude_cell_refs,
+        exclude_alpha_tokens,
+        exclude_numbers,
         alpha_all_triangle=alpha_all_triangle,
     )
 
@@ -1007,6 +1041,16 @@ def generate_timesheet(
                     suffix   = m_lead.group(2).lower()   # 'a' or ''
                     token    = f"{num_text}{suffix}"     # '12a' or '12'
                     cell_tok = f"{cell}{token}"          # 例: 'A12a'
+
+                    # --- 中口などの除外指定（丸/三角を描かない） ---
+                    is_excluded = (
+                        (cell_tok in exclude_cell_refs) or
+                        (suffix and (token in exclude_alpha_tokens)) or
+                        ((not suffix) and (int(num_text) in exclude_numbers))
+                    )
+                    if is_excluded:
+                        draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
+                        continue
 
                     # --- 三角の判定（優先度：セル指定 > 英字付きtoken > 数字のみ） ---
                     is_triangle = (
@@ -1268,6 +1312,11 @@ with st.expander("原画番号の丸/参考設定", expanded=True):
         value=""
     )
 
+    exclude_enclose_str = st.text_input(
+        "中口（丸/三角を付けない番号。A1,A6,A10a,コンマで区切る）",
+        value=""
+    )
+
     # 英字付き（例: 10a, 7b）は全て参考にする
     alpha_all_triangle = st.checkbox("英字付き(例: 10a, 7b)はすべて参考にする", value=True)
 
@@ -1298,6 +1347,7 @@ if uploaded_file is not None:
             cell_labels=cell_labels,
             celllabel_koma=celllabel_koma,
             mixed_triangle_str=triangle_spec_str,   # ← 入力ひとつを渡す（UIのテキストボックス値）
+            exclude_enclose_str=exclude_enclose_str,
             triangle_outline_alpha=triangle_outline_alpha,
             circle_outline_alpha=circle_outline_alpha,
             alpha_all_triangle=alpha_all_triangle,

@@ -637,11 +637,11 @@ def format_repeat_display_text(timing: str) -> str:
         if n % unit_len != 0:
             continue
         repeat_count = n // unit_len
-        if repeat_count < 2:
+        if repeat_count < 4:
             continue
         unit = s[:unit_len]
         if unit * repeat_count == s:
-            # 2回分までは数字で見せる。2回ちょうどでもリピート表記にする。
+            # 4回以上繰り返した場合のみ、2回分の数字+リピートで表示する。
             return f"{unit * 2}リピート"
 
     return str(timing)

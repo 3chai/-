@@ -123,7 +123,7 @@ presets = {
         "true_width": 2340,
         "true_height": 3310 ,
         "default_book_koma": 6,
-        "default_celllabel_koma": 2
+        "default_celllabel_koma": 1
     },
     "Voil": {
         "first_frame_top_y_true": 559,

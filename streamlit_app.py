@@ -531,6 +531,21 @@ def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
         draw.text((bottom_x - w/2.0, y), ch, fill=(0,0,0,255), font=font)
         y += h + spacing
 
+# --- 1コマ1文字でリピート表示を縦に描く ---
+def draw_repeat_vertical_by_koma(draw, text, center_x, start_y, frame_height, font, spacing_nudge_y=0):
+    """
+    リピート表示を、止め文字のように1コマに1文字ずつ縦に描く。
+    例: 12341234リピート -> 1 / 2 / 3 / 4 / ... / リ / ピ / ｜ / ト
+    """
+    if not text:
+        return
+    text = normalize_for_vertical(str(text))
+    for i, ch in enumerate(text):
+        y = start_y + (frame_height * i) + spacing_nudge_y
+        bbox = draw.textbbox((0, 0), ch, font=font)
+        w = bbox[2] - bbox[0]
+        draw.text((center_x - w / 2.0, y), ch, fill=(0, 0, 0, 255), font=font)
+
 # 縦書きテキストの総高さを測る（文字間隔含む）
 def vertical_text_total_height(draw, text, font, spacing=0):
     if not text:
@@ -1062,8 +1077,26 @@ def generate_timesheet(
                             nx, ny = NUM3PLUS_NUDGE_X, NUM3PLUS_NUDGE_Y
                         x += nx * scale_w
                         y_draw += ny * scale_h
-                    else:
-                        font = font_small if len(timing) >= 3 else font_large
+                else:
+                    font = font_small if len(timing) >= 3 else font_large
+
+                # リピート表示は日本語を含むので、止め文字と同じ日本語フォントで描画する
+                # 数字用フォントのままだと環境によって「リピート」が文字化けする
+                is_repeat_display = (display_timing != timing and "リピート" in display_timing)
+                if is_repeat_display:
+                    font = safe_truetype(JP_FONT_PATH, size=int(base_font_size * scale_h * THREE_PLUS_SCALE))
+                    # 止め文字と同じように、セル欄へ1コマ1文字で縦に流す
+                    repeat_center_x = x + (koma_width * 0.35)
+                    draw_repeat_vertical_by_koma(
+                        draw,
+                        display_timing,
+                        center_x=repeat_center_x,
+                        start_y=y_draw,
+                        frame_height=frame_height_true,
+                        font=font,
+                        spacing_nudge_y=-3 * scale_h,
+                    )
+                    continue
 
                 # ===== 囲み（全セル対象：セル指定 > 英字付きtoken > 数字のみ の優先順）=====
                 m_lead = re.match(r"\s*(\d+)([a-zA-Z]?)", timing)  # 先頭の「数字(+任意の英字1文字)」
@@ -1148,7 +1181,7 @@ def generate_timesheet(
 
                         # 「止め」は ① is_tail ② run_len==1 ③ 総フレーム数==1
                         if (mark_kind == 'straight' and is_tail and run_len == 1 and (total_straight == 1)):
-                            vfont = jp_font_large  # 数字と同等サイズの日本語フォント
+                            vfont = jp_font_large  # 日本語フォント（リピート表示と同じ系統）
 
                             # 数字の描画位置に合わせた“上揃え”の開始位置を作る（そのコマの y_draw 相当）
                             def top_like_number(koma_index_from_current: int) -> float:

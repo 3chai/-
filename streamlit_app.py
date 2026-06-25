@@ -1077,8 +1077,8 @@ def generate_timesheet(
                             nx, ny = NUM3PLUS_NUDGE_X, NUM3PLUS_NUDGE_Y
                         x += nx * scale_w
                         y_draw += ny * scale_h
-                else:
-                    font = font_small if len(timing) >= 3 else font_large
+                    else:
+                        font = font_small if len(timing) >= 3 else font_large
 
                 # リピート表示は日本語を含むので、止め文字と同じ日本語フォントで描画する
                 # 数字用フォントのままだと環境によって「リピート」が文字化けする

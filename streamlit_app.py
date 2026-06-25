@@ -621,7 +621,7 @@ def is_number_or_alnum(s: str) -> bool:
 # ======= くり返し数字の短縮表示用 =======
 def format_repeat_display_text(timing: str) -> str:
     """
-    同じ数字列が2回以上くり返されている場合だけ、表示用に短縮する。
+    同じ数字列が4回以上くり返されている場合だけ、表示用に短縮する。
     例:
       12341234 -> 12341234リピート
       123412341234 -> 12341234リピート
@@ -649,7 +649,7 @@ def format_repeat_display_text(timing: str) -> str:
 
 def build_vertical_repeat_maps(df_page: pd.DataFrame, cell: str, frames_per_column: int):
     """
-    タイムシート上で下方向に 1,2,3,1,2,3... のように並ぶリピートを検出する。
+    タイムシート上で下方向に 1,2,3,1,2,3... のように並ぶリピートを検出する。4回以上だけ省略する。
     戻り値:
       repeat_start_text_by_frame: {開始Frame: "123123リピート"}
       repeat_skip_frames: {通常描画をしないFrame...}
@@ -710,7 +710,9 @@ def build_vertical_repeat_maps(df_page: pd.DataFrame, cell: str, frames_per_colu
                 repeat_count += 1
                 pos += unit_len
 
-            if repeat_count >= 2:
+            # 4回以上続いた時だけ「リピート」表記にする。
+            # 2回・3回の繰り返しは通常の数字表示のまま残す。
+            if repeat_count >= 4:
                 total_len = unit_len * repeat_count
                 # 最短単位を優先しつつ、同じ単位なら長い範囲を採る
                 if best is None or unit_len < best[1] or (unit_len == best[1] and total_len > best[0]):

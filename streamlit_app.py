@@ -568,9 +568,39 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
     return book_x
 
 # ---- 追加：判定＆描画ユーティリティ（ギャップ用） ----
+
 def is_number_or_alnum(s: str) -> bool:
     """'12' や '10a' のような先頭が数字で英字1文字までのパターンを判定"""
     return bool(re.fullmatch(r"\d+([a-zA-Z])?", s.strip()))
+
+
+# ======= くり返し数字の短縮表示用 =======
+def format_repeat_display_text(timing: str) -> str:
+    """
+    同じ数字列が2回以上くり返されている場合だけ、表示用に短縮する。
+    例:
+      12341234 -> 12341234リピート
+      123412341234 -> 12341234リピート
+    内部データ・カウント・丸三角判定には使わず、描画表示だけに使う。
+    """
+    s = str(timing or "").strip()
+    if not re.fullmatch(r"\d+", s):
+        return str(timing)
+
+    n = len(s)
+    # 最短の反復単位を探す。ただし表示は最低2回分の数字を出す。
+    for unit_len in range(1, (n // 2) + 1):
+        if n % unit_len != 0:
+            continue
+        repeat_count = n // unit_len
+        if repeat_count < 2:
+            continue
+        unit = s[:unit_len]
+        if unit * repeat_count == s:
+            # 2回分までは数字で見せる。2回ちょうどでもリピート表記にする。
+            return f"{unit * 2}リピート"
+
+    return str(timing)
 
 def build_gap_markers(df: pd.DataFrame, valid_cells, threshold: int = 4, last_frame: Optional[int] = None):
     """
@@ -970,6 +1000,7 @@ def generate_timesheet(
             for _, row in df_page.iterrows():
                 frame = int(row['Frame'])
                 timing = str(row[cell]) if not pd.isna(row[cell]) else ""
+                display_timing = format_repeat_display_text(timing)
                 idx = (frame-1) % frames_per_page
                 col_block = idx // frames_per_column
                 row_pos = idx % frames_per_column
@@ -1049,7 +1080,7 @@ def generate_timesheet(
                         ((not suffix) and (int(num_text) in exclude_numbers))
                     )
                     if is_excluded:
-                        draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
+                        draw.text((x, y_draw), display_timing, fill=(0,0,0,255), font=font)
                         continue
 
                     # --- 三角の判定（優先度：セル指定 > 英字付きtoken > 数字のみ） ---
@@ -1086,7 +1117,7 @@ def generate_timesheet(
                     )
 
                 # テキストを最後に描画
-                draw.text((x, y_draw), timing, fill=(0,0,0,255), font=font)
+                draw.text((x, y_draw), display_timing, fill=(0,0,0,255), font=font)
 
                 # ==== 直後 4コマ以上のギャップがある場合の補助線（2コマ分） ====
                 mark_info = gap_markers.get((cell, frame))
@@ -1109,7 +1140,7 @@ def generate_timesheet(
 
                     if mark_kind in ('wavy', 'straight'):
                         # 線の中心Xは文字のbbox中心
-                        tb = draw.textbbox((x, y_draw), timing, font=font)
+                        tb = draw.textbbox((x, y_draw), display_timing, font=font)
                         cx = (tb[0] + tb[2]) / 2.0
 
                         # 基本の線開始位置は「次のコマの上端」
@@ -1313,7 +1344,7 @@ with st.expander("原画番号の丸/参考設定", expanded=True):
     )
 
     exclude_enclose_str = st.text_input(
-        "セリフ中口指定（丸/三角を付けない番号。A1,A6,A10a,コンマで区切る）",
+        "中口（丸/三角を付けない番号。A1,A6,A10a,コンマで区切る）",
         value=""
     )
 

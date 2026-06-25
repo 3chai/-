@@ -1313,7 +1313,7 @@ with st.expander("原画番号の丸/参考設定", expanded=True):
     )
 
     exclude_enclose_str = st.text_input(
-        "中口（丸/三角を付けない番号。A1,A6,A10a,コンマで区切る）",
+        "セリフ中口指定（丸/三角を付けない番号。A1,A6,A10a,コンマで区切る）",
         value=""
     )
 

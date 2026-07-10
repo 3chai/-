@@ -20,7 +20,7 @@ presets = {
         "true_width": 1682,
         "true_height": 2370,
         "default_book_koma": 6,
-        "default_celllabel_koma": 2,
+        "default_celllabel_koma": 1,
         "default_memo_x": 120,
         "default_memo_y": 120,
     },

@@ -353,7 +353,7 @@ def parse_triangle_spec(s: str):
             continue
 
         # セル指定（A-H + 数字 + 英字0/1）
-        m_cell = re.fullmatch(r"([A-Ha-h])\s*(\d+)\s*([a-zA-Z]?)", part)
+        m_cell = re.fullmatch(r"([A-Ha-h])\s*(\d+)\s*([^0-9\s]?)", part)
         if m_cell:
             c = m_cell.group(1).upper()
             n = m_cell.group(2)
@@ -372,7 +372,7 @@ def parse_triangle_spec(s: str):
             continue
 
         # 英字付き token (10a など)
-        m_alpha = re.fullmatch(r"(\d+)([a-zA-Z])", part)
+        m_alpha = re.fullmatch(r"(\d+)([^0-9\s])", part)
         if m_alpha:
             n = m_alpha.group(1)
             suf = m_alpha.group(2).lower()
@@ -429,7 +429,7 @@ def parse_mixed_triangle_targets(s: str):
             continue
 
         m_num      = re.fullmatch(r"\d+", part)
-        m_numalpha = re.fullmatch(r"\d+[a-zA-Z]", part)
+        m_numalpha = re.fullmatch(r"\d+[^0-9\s]", part)
         if m_num:
             nums.add(int(part))
         elif m_numalpha:
@@ -615,7 +615,7 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
 
 def is_number_or_alnum(s: str) -> bool:
     """'12' や '10a' のような先頭が数字で英字1文字までのパターンを判定"""
-    return bool(re.fullmatch(r"\d+([a-zA-Z])?", s.strip()))
+    return bool(re.fullmatch(r"\d+([^0-9\s])?", s.strip()))
 
 
 # ======= くり返し数字の短縮表示用 =======
@@ -842,7 +842,7 @@ def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, tria
                 continue
 
             # 数字 / 数字+英字
-            m = re.fullmatch(r"(\d+)([a-zA-Z]?)", timing)
+            m = re.fullmatch(r"(\d+)([^0-9\s]?)", timing)
             if m:
                 num_text = m.group(1)
                 suffix = m.group(2).lower()
@@ -1163,7 +1163,7 @@ def generate_timesheet(
                     font = font_large
                 else:
                     # 文字種別でフォントとスケールを決定し、桁数別の補正を適用
-                    m_num_alpha = re.fullmatch(r"(\d+)([a-zA-Z])", timing)  # 10a
+                    m_num_alpha = re.fullmatch(r"(\d+)([^0-9\s])", timing)  # 10a
                     m_digits    = re.fullmatch(r"\d+", timing)              # 12, 108 など
 
                     if m_num_alpha:
@@ -1248,7 +1248,7 @@ def generate_timesheet(
                     continue
 
                 # ===== 囲み（全セル対象：セル指定 > 英字付きtoken > 数字のみ の優先順）=====
-                m_lead = re.match(r"\s*(\d+)([a-zA-Z]?)", timing)  # 先頭の「数字(+任意の英字1文字)」
+                m_lead = re.match(r"\s*(\d+)([^0-9\s]?)", timing)  # 先頭の「数字(+任意の英字1文字)」
                 if m_lead:
                     num_text = m_lead.group(1)           # '12'
                     suffix   = m_lead.group(2).lower()   # 'a' or ''

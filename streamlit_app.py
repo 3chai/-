@@ -1163,10 +1163,31 @@ def generate_timesheet(
                     font = font_large
                 else:
                     # 文字種別でフォントとスケールを決定し、桁数別の補正を適用
-                    m_num_alpha = re.fullmatch(r"(\d+)([^0-9\s])", timing)  # 10a
+                    m_num_prime = re.fullmatch(r"(\d+)'", timing)          # 1', 10'
+                    m_num_alpha = re.fullmatch(r"(\d+)([a-zA-Z])", timing)  # 10a
                     m_digits    = re.fullmatch(r"\d+", timing)              # 12, 108 など
 
-                    if m_num_alpha:
+                    if m_num_prime:
+                        # ダッシュ付き数字は、数字本体と同じ大きさで表示する
+                        digit_part = m_num_prime.group(1)
+                        nlen = len(digit_part)
+                        if nlen == 1:
+                            font = font_large
+                            nx, ny = NUM1_NUDGE_X, NUM1_NUDGE_Y
+                        elif nlen == 2:
+                            scale = TWO_DIGIT_SCALE
+                            font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * scale))
+                            x += alphabet_offset_x * 0.6
+                            nx, ny = NUM2_NUDGE_X, NUM2_NUDGE_Y
+                        else:
+                            scale = THREE_PLUS_SCALE
+                            font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * scale))
+                            x += alphabet_offset_x * 0.6
+                            nx, ny = NUM3PLUS_NUDGE_X, NUM3PLUS_NUDGE_Y
+                        x += nx * scale_w
+                        y_draw += ny * scale_h
+
+                    elif m_num_alpha:
                         # 英字付き（例：10a）。数字部分の桁数で細かく最適化
                         digit_part = m_num_alpha.group(1)   # "10"
                         nlen = len(digit_part)

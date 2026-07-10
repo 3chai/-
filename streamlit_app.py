@@ -353,7 +353,7 @@ def parse_triangle_spec(s: str):
             continue
 
         # セル指定（A-H + 数字 + 英字0/1）
-        m_cell = re.fullmatch(r"([A-Ha-h])\s*(\d+)\s*([^0-9\s]?)", part)
+        m_cell = re.fullmatch(r"([A-Ha-h])\s*(\d+)\s*([a-zA-Z]?)", part)
         if m_cell:
             c = m_cell.group(1).upper()
             n = m_cell.group(2)
@@ -372,7 +372,7 @@ def parse_triangle_spec(s: str):
             continue
 
         # 英字付き token (10a など)
-        m_alpha = re.fullmatch(r"(\d+)([^0-9\s])", part)
+        m_alpha = re.fullmatch(r"(\d+)([a-zA-Z])", part)
         if m_alpha:
             n = m_alpha.group(1)
             suf = m_alpha.group(2).lower()
@@ -429,7 +429,7 @@ def parse_mixed_triangle_targets(s: str):
             continue
 
         m_num      = re.fullmatch(r"\d+", part)
-        m_numalpha = re.fullmatch(r"\d+[^0-9\s]", part)
+        m_numalpha = re.fullmatch(r"\d+[a-zA-Z]", part)
         if m_num:
             nums.add(int(part))
         elif m_numalpha:
@@ -615,7 +615,7 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
 
 def is_number_or_alnum(s: str) -> bool:
     """'12' や '10a' のような先頭が数字で英字1文字までのパターンを判定"""
-    return bool(re.fullmatch(r"\d+([^0-9\s])?", s.strip()))
+    return bool(re.fullmatch(r"\d+([a-zA-Z])?", s.strip()))
 
 
 # ======= くり返し数字の短縮表示用 =======
@@ -842,7 +842,7 @@ def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, tria
                 continue
 
             # 数字 / 数字+英字
-            m = re.fullmatch(r"(\d+)([^0-9\s]?)", timing)
+            m = re.fullmatch(r"(\d+)([a-zA-Z]?)", timing)
             if m:
                 num_text = m.group(1)
                 suffix = m.group(2).lower()
@@ -870,7 +870,7 @@ def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, tria
 
                 is_triangle = (
                     (cell_tok in triangle_cell_refs) or
-                    (suffix and (alpha_all_triangle or (token in triangle_alpha_tokens))) or
+                    ((suffix and suffix != "'" and alpha_all_triangle) or (token in triangle_alpha_tokens)) or
                     ((not suffix) and (int(num_text) in triangle_numbers))
                 )
 
@@ -1163,31 +1163,10 @@ def generate_timesheet(
                     font = font_large
                 else:
                     # 文字種別でフォントとスケールを決定し、桁数別の補正を適用
-                    m_num_prime = re.fullmatch(r"(\d+)'", timing)          # 1', 10'
                     m_num_alpha = re.fullmatch(r"(\d+)([a-zA-Z])", timing)  # 10a
                     m_digits    = re.fullmatch(r"\d+", timing)              # 12, 108 など
 
-                    if m_num_prime:
-                        # ダッシュ付き数字は、数字本体と同じ大きさで表示する
-                        digit_part = m_num_prime.group(1)
-                        nlen = len(digit_part)
-                        if nlen == 1:
-                            font = font_large
-                            nx, ny = NUM1_NUDGE_X, NUM1_NUDGE_Y
-                        elif nlen == 2:
-                            scale = TWO_DIGIT_SCALE
-                            font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * scale))
-                            x += alphabet_offset_x * 0.6
-                            nx, ny = NUM2_NUDGE_X, NUM2_NUDGE_Y
-                        else:
-                            scale = THREE_PLUS_SCALE
-                            font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * scale))
-                            x += alphabet_offset_x * 0.6
-                            nx, ny = NUM3PLUS_NUDGE_X, NUM3PLUS_NUDGE_Y
-                        x += nx * scale_w
-                        y_draw += ny * scale_h
-
-                    elif m_num_alpha:
+                    if m_num_alpha:
                         # 英字付き（例：10a）。数字部分の桁数で細かく最適化
                         digit_part = m_num_alpha.group(1)   # "10"
                         nlen = len(digit_part)
@@ -1269,7 +1248,7 @@ def generate_timesheet(
                     continue
 
                 # ===== 囲み（全セル対象：セル指定 > 英字付きtoken > 数字のみ の優先順）=====
-                m_lead = re.match(r"\s*(\d+)([^0-9\s]?)", timing)  # 先頭の「数字(+任意の英字1文字)」
+                m_lead = re.match(r"\s*(\d+)([a-zA-Z]?)", timing)  # 先頭の「数字(+任意の英字1文字)」
                 if m_lead:
                     num_text = m_lead.group(1)           # '12'
                     suffix   = m_lead.group(2).lower()   # 'a' or ''
@@ -1289,7 +1268,7 @@ def generate_timesheet(
                     # --- 三角の判定（優先度：セル指定 > 英字付きtoken > 数字のみ） ---
                     is_triangle = (
                         (cell_tok in triangle_cell_refs) or
-                        (suffix and (alpha_all_triangle or (token in triangle_alpha_tokens))) or
+                        ((suffix and suffix != "'" and alpha_all_triangle) or (token in triangle_alpha_tokens)) or
                         ((not suffix) and (int(num_text) in triangle_numbers))
                     )
 
@@ -1554,7 +1533,7 @@ with st.expander("原画番号の丸/参考設定", expanded=True):
     )
 
     # 英字付き（例: 10a, 7b）は全て参考にする
-    alpha_all_triangle = st.checkbox("英字付き(例: 10a, 7b)はすべて参考にする", value=True)
+    alpha_all_triangle = st.checkbox("英字付き(例: 10a, 7b)はすべて参考にする", value=False)
 
     # 不透明度（％）スライダー → 0〜255 に変換（枠のみ）
     tri_alpha_pct  = st.slider("三角の枠の不透明度(%)", 0, 100, int(round(TRIANGLE_OUTLINE_ALPHA * 100 / 255)))

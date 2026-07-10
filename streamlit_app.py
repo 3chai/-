@@ -353,11 +353,11 @@ def parse_triangle_spec(s: str):
             continue
 
         # セル指定（A-H + 数字 + 英字0/1）
-        m_cell = re.fullmatch(r"([A-Ha-h])\s*(\d+)\s*([a-zA-Z]?)", part)
+        m_cell = re.fullmatch(r"([A-Ha-h])\s*(\d+)\s*([a-zA-Z'’＇]?)", part)
         if m_cell:
             c = m_cell.group(1).upper()
             n = m_cell.group(2)
-            suf = m_cell.group(3).lower()
+            suf = m_cell.group(3).lower().replace("’", "'").replace("＇", "'")
             cell_refs.add(f"{c}{n}{suf}")
             continue
 
@@ -372,10 +372,10 @@ def parse_triangle_spec(s: str):
             continue
 
         # 英字付き token (10a など)
-        m_alpha = re.fullmatch(r"(\d+)([a-zA-Z])", part)
+        m_alpha = re.fullmatch(r"(\d+)([a-zA-Z'’＇])", part)
         if m_alpha:
             n = m_alpha.group(1)
-            suf = m_alpha.group(2).lower()
+            suf = m_alpha.group(2).lower().replace("’", "'").replace("＇", "'")
             alpha_tokens.add(f"{n}{suf}")
             continue
 
@@ -615,7 +615,7 @@ def calc_book_x(pos, cell_x_positions_true, koma_width, scale_w):
 
 def is_number_or_alnum(s: str) -> bool:
     """'12' や '10a' のような先頭が数字で英字1文字までのパターンを判定"""
-    return bool(re.fullmatch(r"\d+([a-zA-Z])?", s.strip()))
+    return bool(re.fullmatch(r"\d+([a-zA-Z'’＇])?", s.strip()))
 
 
 # ======= くり返し数字の短縮表示用 =======
@@ -842,10 +842,10 @@ def compute_sheet_counts(df: pd.DataFrame, valid_cells, triangle_cell_refs, tria
                 continue
 
             # 数字 / 数字+英字
-            m = re.fullmatch(r"(\d+)([a-zA-Z]?)", timing)
+            m = re.fullmatch(r"(\d+)([a-zA-Z'’＇]?)", timing)
             if m:
                 num_text = m.group(1)
-                suffix = m.group(2).lower()
+                suffix = m.group(2).lower().replace("’", "'").replace("＇", "'")
                 token = f"{num_text}{suffix}"
 
                 # 同じセル内で同じ番号/番号+英字が続いたり再登場しても1枚扱い
@@ -1248,10 +1248,10 @@ def generate_timesheet(
                     continue
 
                 # ===== 囲み（全セル対象：セル指定 > 英字付きtoken > 数字のみ の優先順）=====
-                m_lead = re.match(r"\s*(\d+)([a-zA-Z]?)", timing)  # 先頭の「数字(+任意の英字1文字)」
+                m_lead = re.match(r"\s*(\d+)([a-zA-Z'’＇]?)", timing)  # 先頭の「数字(+任意の英字1文字)」
                 if m_lead:
                     num_text = m_lead.group(1)           # '12'
-                    suffix   = m_lead.group(2).lower()   # 'a' or ''
+                    suffix   = m_lead.group(2).lower().replace("’", "'").replace("＇", "'")   # 'a' or ''
                     token    = f"{num_text}{suffix}"     # '12a' or '12'
                     cell_tok = f"{cell}{token}"          # 例: 'A12a'
 
@@ -1523,12 +1523,12 @@ with c5:
 with st.expander("原画番号の丸/参考設定", expanded=True):
     # 例: A1, A10a, C24, 3, 5-7, 10a
     triangle_spec_str = st.text_input(
-        "参考にする指定（A1,A6,A10a,コンマで区切る）",
+        "参考にする指定（A1,A6,A10a,3',コンマで区切る）",
         value=""
     )
 
     exclude_enclose_str = st.text_input(
-        "セリフ中口指定（丸/三角を付けない番号。A1,A6,A10a,コンマで区切る）",
+        "セリフ中口指定（丸/三角を付けない番号。A1,A6,A10a,3',コンマで区切る）",
         value=""
     )
 

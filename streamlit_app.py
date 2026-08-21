@@ -541,6 +541,12 @@ def draw_vertical_bottom(draw, text, bottom_x, bottom_y, font, spacing=0):
         draw.text((bottom_x - w/2.0, y), ch, fill=(0,0,0,255), font=font)
         y += h + spacing
 
+def center_text_x_in_koma(draw, koma_left_x, koma_width, text, font, nudge_x=0.0):
+    """コマ幅の中央に数字を置くときの draw.text 左端 x。"""
+    cell_center_x = koma_left_x + koma_width * 0.5 + nudge_x
+    tb = draw.textbbox((0, 0), text, font=font)
+    return cell_center_x - (tb[0] + tb[2]) / 2.0
+
 # --- リピート表示を「止め」と同じ描き方で縦に描く ---
 def draw_repeat_like_stop(draw, text, center_x, base_y, frame_height, text_offset_y,
                           font, scale_h=1.0, scale_w=1.0, stroke_px=3,
@@ -1207,14 +1213,15 @@ def generate_timesheet(
                         elif nlen == 2:
                             scale = TWO_DIGIT_SCALE
                             font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * scale))
-                            x += alphabet_offset_x * 0.6
                             nx, ny = NUM2_NUDGE_X, NUM2_NUDGE_Y
                         else:
                             scale = THREE_PLUS_SCALE
                             font = safe_truetype(FONT_PATH, size=int(base_font_size * scale_h * scale))
-                            x += alphabet_offset_x * 0.6
                             nx, ny = NUM3PLUS_NUDGE_X, NUM3PLUS_NUDGE_Y
-                        x += nx * scale_w
+                        koma_left_x = x_base if col_block == 0 else x_base + column_offset_x
+                        x = center_text_x_in_koma(
+                            draw, koma_left_x, koma_width, display_timing, font, nudge_x=nx * scale_w
+                        )
                         y_draw += ny * scale_h
                     else:
                         font = font_small if len(timing) >= 3 else font_large

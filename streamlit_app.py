@@ -125,6 +125,16 @@ presets = {
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     },
+    "YOSTER PICTURES": {
+        "first_frame_top_y_true": 1333,
+        "frame_height_true": 49.32,
+        "cell_x_positions_true": {cell: 231 + 48.2 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1678,
+        "true_width": 3577,
+        "true_height": 5030 ,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 2
+    },
     "MAPPA": {
         "first_frame_top_y_true": 553,
         "frame_height_true": 26.57,

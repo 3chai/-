@@ -163,7 +163,7 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
-        "Studio massket.": {
+        "STUDIO MASSKET": {
         "first_frame_top_y_true": 956,
         "frame_height_true": 53.2,
         "cell_x_positions_true": {cell: 114 + 65 * offset for cell, offset in cell_offsets.items()},

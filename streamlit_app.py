@@ -205,6 +205,16 @@ presets = {
         "default_book_koma": 4,
         "default_celllabel_koma": 1
     },
+     "スタジオコロリド": {
+        "first_frame_top_y_true": 737,
+        "frame_height_true": 34,
+        "cell_x_positions_true": {cell: 109.45 + 40.08 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1240.50,
+        "true_width": 2339,
+        "true_height": 3307,
+        "default_book_koma": 4,
+        "default_celllabel_koma": 1
+    },
     "ぴえろ（BLEACH用）": {
         "first_frame_top_y_true": 800,
         "frame_height_true": 27.5,
@@ -245,7 +255,7 @@ presets = {
         "default_book_koma": 5,  
         "default_celllabel_koma": 0,
     },
-        "トムス": {
+    "トムス": {
         "first_frame_top_y_true": 450.0,
         "frame_height_true": 25.5,
         "cell_x_positions_true": {cell: 61 + 22 * offset for cell, offset in cell_offsets.items()},

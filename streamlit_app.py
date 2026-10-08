@@ -12,18 +12,6 @@ cell_offsets = {
 CELLS_ALL = list(cell_offsets.keys())
 
 presets = {
-    "トムス": {
-        "first_frame_top_y_true": 450.0,
-        "frame_height_true": 25.5,
-        "cell_x_positions_true": {cell: 61 + 22 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 809.5374720357942,
-        "true_width": 1682,
-        "true_height": 2370,
-        "default_book_koma": 6,
-        "default_celllabel_koma": 1,
-        "default_memo_x": 120,
-        "default_memo_y": 120,
-    },
     "Andraft": {
         "first_frame_top_y_true": 1279,
         "frame_height_true": 49.6,
@@ -131,7 +119,7 @@ presets = {
         "cell_x_positions_true": {cell: 231 + 48.3 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1680,
         "true_width": 3577,
-        "true_height": 5030 ,
+        "true_height": 5030,
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
@@ -141,7 +129,7 @@ presets = {
         "cell_x_positions_true": {cell: 84.5 + 26.7 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 876.5,
         "true_width": 1788,
-        "true_height": 2514 ,
+        "true_height": 2514,
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
@@ -151,7 +139,7 @@ presets = {
         "cell_x_positions_true": {cell: 85.5 + 35.50 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1124,
         "true_width": 2340,
-        "true_height": 3310 ,
+        "true_height": 3310,
         "default_book_koma": 6,
         "default_celllabel_koma": 1
     },
@@ -161,7 +149,7 @@ presets = {
         "cell_x_positions_true": {cell: 71 + 32.7 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 838.3,
         "true_width": 1753,
-        "true_height": 2480 ,
+        "true_height": 2480,
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
@@ -171,8 +159,18 @@ presets = {
         "cell_x_positions_true": {cell: 35 + 27.77 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1030,
         "true_width": 2024,
-        "true_height": 2866 ,
+        "true_height": 2866,
         "default_book_koma": 6,
+        "default_celllabel_koma": 2
+    },
+        "Studio massket.": {
+        "first_frame_top_y_true": 956,
+        "frame_height_true": 53.2,
+        "cell_x_positions_true": {cell: 114 + 65 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1720,
+        "true_width": 3508,
+        "true_height": 4901,
+        "default_book_koma": 4,
         "default_celllabel_koma": 2
     },
     "100studio": {
@@ -246,7 +244,19 @@ presets = {
         "true_height": 2480,
         "default_book_koma": 5,  
         "default_celllabel_koma": 0,
-    }
+    },
+        "トムス": {
+        "first_frame_top_y_true": 450.0,
+        "frame_height_true": 25.5,
+        "cell_x_positions_true": {cell: 61 + 22 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 809.5374720357942,
+        "true_width": 1682,
+        "true_height": 2370,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 1,
+        "default_memo_x": 120,
+        "default_memo_y": 120,
+    },
 }
 
 # =============== 位置調整の基準（Andraft基準） ===============

@@ -123,6 +123,16 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
+    "MADHOUSE": {
+        "first_frame_top_y_true": 570,
+        "frame_height_true": 28.37,
+        "cell_x_positions_true": {cell: 70.35 + 28.26 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 933.93,
+        "true_width": 1870,
+        "true_height": 2645,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 2
+    },
     "MAPPA": {
         "first_frame_top_y_true": 553,
         "frame_height_true": 26.57,

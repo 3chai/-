@@ -103,6 +103,16 @@ presets = {
         "default_book_koma": 6,
         "default_celllabel_koma": 2
     },
+    "JUVENAGE": {
+        "first_frame_top_y_true": 907,
+        "frame_height_true": 32.37,
+        "cell_x_positions_true": {cell: 76.5 + 38.8 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1121,
+        "true_width": 2338,
+        "true_height": 3308,
+        "default_book_koma": 6,
+        "default_celllabel_koma": 2
+    },
     "ROLL2": {
         "first_frame_top_y_true": 1429,                  # 最初のフレームの上端Y
         "frame_height_true": 47.65,                      # 1コマの高さ

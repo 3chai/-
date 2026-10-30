@@ -228,8 +228,8 @@ presets = {
      "スタジオコロリド": {
         "first_frame_top_y_true": 736,
         "frame_height_true": 34.98,
-        "cell_x_positions_true": {cell: 114.45 + 37.08 * offset for cell, offset in cell_offsets.items()},
-        "column_offset_x": 1199.50,
+        "cell_x_positions_true": {cell: 114.45 + 38.98 * offset for cell, offset in cell_offsets.items()},
+        "column_offset_x": 1238.50,
         "true_width": 2339,
         "true_height": 3307,
         "default_book_koma": 4,

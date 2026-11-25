@@ -195,7 +195,7 @@ presets = {
     },
         "studio keel": {
         "first_frame_top_y_true": 791,
-        "frame_height_true": 34,
+        "frame_height_true": 34.1,
         "cell_x_positions_true": {cell: 82.55 + 44.33 * offset for cell, offset in cell_offsets.items()},
         "column_offset_x": 1119.15,
         "true_width": 2338,
